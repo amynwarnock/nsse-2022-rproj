@@ -1,0 +1,2693 @@
+---
+title: "NSSE 2022 Analysis"
+author: "Amy N. Warnock"
+date: "2022-09-08"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# install.packages("here")
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("rio")
+# install.packages("colorblindr")
+# install.packages("scales")
+# install.packages("wesanderson")
+# install.packages("ggridges")
+#install.packages("Rfast")
+#install.packages("MASS")
+#install.packages("likert")
+#install.packages("psych")
+#install.packages("haven")
+#install.packages("sjPlot")
+#install.packages("ggrepel")
+#install.packages("cowplot")
+#install.packages("remotes")
+#remotes::install_github("martinctc/surveytoolbox")
+#install.packages("colorspace", repos = "http://R-Forge.R-project.org")
+#remotes::install_github("clauswilke/colorblindr")
+#install.packages("stringr")
+#install.packages("gt")
+#install.packages("gtExtras")
+
+library(here)
+library(tidyverse)
+library(janitor)
+library(rio)
+library(scales)
+library(wesanderson)
+library(likert)
+library(ggrepel)
+library(cowplot)
+library(surveytoolbox)
+library(colorblindr)
+library(stringr)
+library(gt)
+library(gtExtras)
+
+#library(psych)
+#library(sjPlot)
+```
+
+```{r load-data}
+# load the 2022 NSSE dataset
+
+nsse_orig_full <- import(
+  here("data", "NSSE22 Data (UO).sav"), 
+  setclass = "tbl_df")
+
+# load demographics from IDR/Cognos (exported 10/14/22 AW)
+idr_demo_orig <- import(
+  here("data", "2022-10-14c-Cognos_StudentDemographics_ALL_wPIDM.xlsx"), 
+  setclass = "tbl_df")
+
+```
+
+```{r wrangle}
+# NSSE: select variables of interest and recode race/ethnicity and co-curricular engagement
+nsse_orig_narrowed <- nsse_orig_full %>% 
+  select(studentid, 
+         IRclass, 
+         IRsex19, 
+         IRrace, 
+         DDrace,
+         DDeconomic, 
+         DDreligion,
+         DDpolitical,
+         QIstudent,
+         QIadvisor,
+         QIfaculty, 
+         QIstaff,
+         QIadmin,
+         SEacademic,
+         SElearnsup,
+         SEdiverse,
+         SEsocial,
+         SEwellness,
+         SEnonacad,
+         SEactivities,
+         SEevents,
+         tmcocurr,
+         tmworkonhrs,
+         tmworkoffhrs, 
+         CWPidea,
+         CWPclarify,
+         CWPrelevant,
+         CWPdescribe,
+         CWPfeedback,
+         CWPfamily,
+         CWPhighschool,
+         CWPadvisor,
+         CWPcoach,
+         CWPresearch,
+         CWPcocurrR,
+         CIV03a19,
+         CIV03b19,
+         CIV04c19,
+         CIV01a19,
+         CIV01b19,
+         CIV02c19,
+         CIV04a19,
+         CIV04i19,
+         present,
+         RIsocietal,
+         RIdiverse,
+         leader,
+         research,
+         learncom,
+         sbvalued,
+         reading,
+         pgspeak) %>% 
+  mutate(studentid = as.numeric(studentid),
+         tmcocurr_binned = 
+           case_when(
+             tmcocurr == '1' | tmcocurr == '2' ~ 'Low', 
+             tmcocurr == '3' | tmcocurr == '4' ~ 'Moderate', 
+             tmcocurr == '5' | tmcocurr == '6' | 
+               tmcocurr == '7' | tmcocurr == '8' ~ 'High'),
+         tmds = 
+           case_when(
+             IRrace == '1' | IRrace == '2' | 
+               IRrace == '3' | IRrace == '4' |
+               IRrace == '5' ~ 'TMDS',
+             IRrace == '6' ~ 'Non-TMDS'),
+         IRclass = dplyr::recode(IRclass,
+                                 `1` = "First Year",
+                                 `4` = "Senior")
+  )
+
+head(nsse_orig_narrowed)
+
+# create factorized and characterized versions
+nsse_fct_wide <- nsse_orig_narrowed %>% 
+  factorize()
+
+head(nsse_fct_wide)
+str(nsse_fct_wide)
+
+# to swap out variable names with variable labels (i.e., the questions themselves)
+# colnames(data_orig) <- sapply(data_orig, function(x) attr(x, "label"))
+
+# create a df containing the var labels
+# data_vars_labels <- nsse_orig_full %>% 
+#   varl_tb()
+
+
+nsse_chr_wide <- nsse_orig_narrowed %>% 
+  characterize()
+
+head(nsse_chr_wide)
+
+# check the recoded tmcocurr and race/eth variables
+ftable(nsse_chr_wide$IRrace, nsse_chr_wide$tmds, exclude = "")
+ftable(nsse_chr_wide$tmcocurr, nsse_chr_wide$tmcocurr_binned, exclude = "")
+
+# pivot longer so that that item names and responses to each item are stored in 2 columns (i.e., one row per student per item response)
+nsse_fct_long <- nsse_fct_wide %>% 
+  pivot_longer(5:52,
+               names_to = "var", 
+               values_to = "response") %>% 
+  mutate(var_detail = dplyr::recode(var, 
+                                    DDrace = "Race/ethnicity",
+                                    DDeconomic = "SES",
+                                    DDreligion = "Religious beliefs",
+                                    DDpolitical = "Political ideology",
+                                    QIstudent = "Students",
+                                    QIadvisor = "Advisors",
+                                    QIfaculty = "Faculty",
+                                    QIstaff = "Student services",
+                                    QIadmin = "Admin",
+                                    SEacademic = "Support for succeeding academically",
+                                    SElearnsup = "Using learning support services",
+                                    SEdiverse = "Encouraging diverse interactions",
+                                    SEsocial = "Opportunities for social inolvement",
+                                    SEwellness = "Support for well-being",
+                                    SEnonacad = "Help managing school/work/life balance",
+                                    SEactivities = "Attending campus activities/events",
+                                    SEevents = "Attending social justice events",
+                                    present = "Given a course presentation",
+                                    RIsocietal = "Connected learning to societal problems or issues",
+                                    RIdiverse = "Included diverse perspectives in course discussions or assignments",
+                                    leader = "Hold a leadership role in a student organization/group",
+                                    research = "Work with faculty on a research project",
+                                    learncom = "Participate in a learning community",
+                                    CWPidea = "They have a clear idea of career plans",
+                                    CWPclarify = "Their experience at UO helped clarify career plans",
+                                    CWPrelevant = "Their learning at UO is relevant to career plans",
+                                    CWPdescribe = "They can describe what is necessary for career plans",
+                                    CWPfeedback = "They have received supportive feedback from faculty/advisors about career plans",
+                                    CWPfamily = "Advice from family/friends",
+                                    CWPhighschool = "Advice from high school teacher/counselor",
+                                    CWPadvisor = "Interactions with faculty/academic advisor",
+                                    CWPcoach = "Interactions with career coach/career advisor",
+                                    CWPcocurrR = "Co-curricular activities",
+                                    CWPresearch = "Researched career interest/potential employer/job market",
+                                    CIV03a19 = "Course assignments",
+                                    CIV03b19 = "Course discussions",
+                                    CIV04a19 = "Informed themselves about campus/local issues",
+                                    CIV04c19 = "Discussed campus/local issues with others",
+                                    CIV04i19 = "Organized others to work on campus/local issues",
+                                    CIV01a19 = "Help people resolve disagreements",
+                                    CIV01b19 = "Resolve conflicts involving bias/discrimination/prejudice",
+                                    CIV02c19 = "Being an informed and active citizen"
+  ))
+
+
+# Cognos demographics dataset: select vars that will be used in these analyses, recode residency status, and create variable for first-generation status
+
+idr_demo <- idr_demo_orig %>% 
+  mutate(
+    residency = ifelse(RESIDENCY_DESC == "Non-Resident", 
+                       "Non-Resident", 
+                       "Resident"),
+    EDUCATION_LEVEL_DESC2 = na_if(EDUCATION_LEVEL_DESC, 
+                                  "Unknown"),
+    firstgen = ifelse((EDUCATION_LEVEL_DESC2 == "Bachelors Degree" |  
+                         EDUCATION_LEVEL_DESC2 == "Masters Degree" |
+                         EDUCATION_LEVEL_DESC2 == "Doctoral Degree"), 
+                      "Non-First Gen", 
+                      "First Gen")) %>% 
+  select(ID,
+         PERSON_UID,
+         CONFIDENTIALITY_IND,
+         residency,
+         firstgen) 
+
+# checking that there is one row per stu
+# idr_demo_IDn <- idr_demo %>% 
+#   group_by(ID) %>% 
+#   summarize(n = n())
+
+```
+
+```{r join-nsse-idr}
+
+# join LONG factorized nsse file with demos from IDR/Cognos
+
+nsse_idr_long <- left_join(nsse_fct_long, 
+                           idr_demo,
+                           by = c("studentid" = "PERSON_UID"))
+
+# join WIDE characterized nsse file with demos from IDR/Cognos
+
+nsse_idr_wide_chr <- left_join(nsse_chr_wide, 
+                           idr_demo,
+                           by = c("studentid" = "PERSON_UID"))
+
+# FG - overall, 5% missing
+nsse_idr_wide_chr %>% 
+  group_by(IRclass, firstgen) %>% 
+  summarize(n = (n()))
+
+# TMDS - overall, 13% missing
+nsse_idr_wide_chr %>% 
+  group_by(IRclass, tmds) %>% 
+  summarize(n = (n()))
+
+```
+
+```{r dumbbell-wrangling-functions-mult}
+# DD - Discussions with diverse others
+                                
+dumbbellprep_dd <- function(data, demographic) {
+  data %>% 
+    filter(startsWith(var, "DD")) %>% 
+    group_by({{demographic}}, 
+             IRclass, 
+             var, 
+             var_detail, 
+             response) %>%
+    summarize(n = n()) %>% 
+    pivot_wider(
+      names_from = response,
+      values_from = n) %>% 
+    mutate(
+      total = sum(Never, Sometimes, Often, `Very often`, na.rm = TRUE),
+      ovo = sum(Often, `Very often`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'DDrace' ~ '1',
+        var == 'DDeconomic' ~ '2',
+        var == 'DDreligion' ~ '3',
+        var == 'DDpolitical' ~ '4'))
+}
+
+# QI - Quality of interactions
+dumbbellprep_qi <- function(data, demographic) {
+  data %>% 
+    filter(startsWith(var, "QI")) %>%
+    group_by({{demographic}}, 
+             IRclass, 
+             var, 
+             var_detail, 
+             response) %>% 
+    summarize(n = n()) %>% 
+    pivot_wider(names_from = response,
+                values_from = n) %>% 
+    mutate(
+      total = sum(`1 Poor`, `2`, `3`, 
+                  `4`, `5`, `6`, `7 Excellent`, na.rm = TRUE),
+      ovo = sum(`6`, `7 Excellent`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'QIstudent' ~ '1',
+        var == 'QIadvisor' ~ '2',
+        var == 'QIfaculty' ~ '3',
+        var == 'QIstaff' ~ '4',
+        var == 'QIadmin' ~ '5'))
+}
+
+
+# SE - Social engagement
+dumbbellprep_se <- function(data, demographic) {
+  data %>%
+    filter(startsWith(var, "SE")) %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>%
+    mutate(
+      total = sum(`Very little`, `Some`, 
+                  `Quite a bit`, `Very much`, na.rm = TRUE),
+      ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'SEacademic' ~ '1',
+        var == 'SElearnsup' ~ '2',
+        var == 'SEdiverse' ~ '3',
+        var == 'SEsocial' ~ '4',
+        var == 'SEwellness' ~ '5',
+        var == 'SEnonacad' ~ '6',
+        var == 'SEactivities' ~ '7',
+        var == 'SEevents' ~ '8'))
+}
+
+# RI - Reflective and integrative learning
+
+dumbbellprep_ri <- function(data, demographic) {
+  data %>%
+    filter(startsWith(var, "RI")) %>% 
+    group_by({{demographic}}, 
+             IRclass, 
+             var, 
+             var_detail, 
+             response) %>% 
+    summarize(n = n()) %>% 
+    pivot_wider(names_from = response,
+                values_from = n) %>% 
+    mutate(total = sum(`Never`, `Sometimes`, 
+                       `Often`, `Very often`, na.rm = TRUE),
+           ovo = sum(`Often`, `Very often`, na.rm = TRUE),
+           percent = (ovo / total),
+           pair = case_when(
+             var == 'RIsocietal' ~ '1',
+             var == 'RIdiverse' ~ '2'))
+}
+
+# HIP - high impact practices
+dumbbellprep_hip <- function(data, demographic) {
+  data %>%
+    filter(var == "leader" |
+           var == "research"|
+           var == "learncom") %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>%
+    mutate(
+      total = sum(`Have not decided`, `Do not plan to do`, 
+                  `Plan to do`, `Done or in progress`, na.rm = TRUE),
+      ovo = sum(`Plan to do`, `Done or in progress`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'leader' ~ '1',
+        var == 'research' ~ '2',
+        var == 'learncom' ~ '3'))
+}
+
+
+# CP - CWP career plans
+dumbbellprep_cp <- function(data, demographic) {
+  data %>%
+    filter(var == "CWPidea" |
+           var == "CWPclarify" |
+           var == "CWPrelevant" |
+           var == "CWPdescribe" |
+           var == "CWPfeedback") %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>%
+    mutate(
+      total = sum(`Not at all`, `Very little`, `Some`, 
+                  `Quite a bit`, `Very much`, na.rm = TRUE),
+      ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'CWPidea' ~ '1',
+        var == 'CWPclarify' ~ '2',
+        var == 'CWPrelevant' ~ '3',
+        var == 'CWPdescribe' ~ '4',
+        var == 'CWPfeedback' ~ '5'))
+}
+
+# CPI - CWP influences on career plans
+dumbbellprep_cpi <- function(data, demographic) {
+  data %>%
+    filter(var == "CWPfamily" |
+           var == "CWPhighschool" |
+           var == "CWPadvisor" |
+           var == "CWPcoach" |
+           var == "CWPcocurrR") %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>%
+    mutate(
+      total = sum(`Not at all`, `Very little`, `Some`, 
+                  `Quite a bit`, `Very much`, na.rm = TRUE),
+      ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'CWPfamily' ~ '1',
+        var == 'CWPhighschool' ~ '2',
+        var == 'CWPadvisor' ~ '3',
+        var == 'CWPcoach' ~ '4',
+        var == 'CWPcocurrR' ~ '5'))
+}
+
+# CIVE - CIV engagement encouragement
+dumbbellprep_cive <- function(data, demographic) {
+  data %>%
+    filter(startsWith(var, "CIV03")) %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>%
+    mutate(
+      total = sum(`Very little`, `Some`, 
+                  `Quite a bit`, `Very much`, na.rm = TRUE),
+      ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'CIV03a19' ~ '1',
+        var == 'CIV03b19' ~ '2'))
+} 
+
+# CIVL - CIV campus and local issues
+dumbbellprep_civl <- function(data, demographic) {
+  data %>%
+    filter(startsWith(var, "CIV04")) %>% 
+    group_by({{demographic}}, 
+             IRclass, 
+             var, 
+             var_detail, 
+             response) %>% 
+    summarize(n = n()) %>% 
+    pivot_wider(names_from = response,
+                values_from = n) %>% 
+    mutate(total = sum(`Never`, `Sometimes`, 
+                       `Often`, `Very often`, na.rm = TRUE),
+           ovo = sum(`Often`, `Very often`, na.rm = TRUE),
+           percent = (ovo / total),
+           pair = case_when(
+             var == 'CIV04a19' ~ '1',
+             var == 'CIV04c19' ~ '2',
+             var == 'CIV04i19' ~ '3'))
+}
+
+
+# CIVCR - CIV conflict resolution
+dumbbellprep_civcr <- function(data, demographic) {
+  data %>%
+    filter(startsWith(var, "CIV01")) %>% 
+    group_by({{demographic}}, 
+             IRclass, 
+             var, 
+             var_detail, 
+             response) %>% 
+    summarize(n = n()) %>% 
+    pivot_wider(names_from = response,
+                values_from = n) %>% 
+    mutate(
+      total = sum(`Poor`, `2`, `3`, 
+                  `4`, `Excellent`, na.rm = TRUE),
+      ovo = sum(`4`, `Excellent`, na.rm = TRUE),
+      percent = (ovo / total),
+      pair = case_when(
+        var == 'CIV01a19' ~ '1',
+        var == 'CIV01b19' ~ '2'))
+}
+```
+
+```{r dumbbell-wrangling-functions-singleitem}
+
+# foundational wrangling for dumbbell plots of single items (i.e., not a group of items as with previous areas of interest)
+
+dumbbellprep_single <- function(data, item, demographic) {
+  data %>%
+    filter(var == {{item}}) %>%
+    group_by({{demographic}},
+             IRclass,
+             var,
+             response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = response,
+                values_from = n) %>% 
+    rename(demo = {{demographic}})
+}
+```
+
+```{r dbell-summary-table-generic-function}
+
+# Generic function for prepping data for summary tables that correspond to dumbbell plots.
+# To be used with areas that do not have 1, 2, 3, or 5 questions of interest
+
+dbell_sum_tbl_gen <- function(data, items) {
+  
+  a <- data %>%
+    filter(IRsex19 != "Unknown",
+           {{items}}) %>%
+    group_by(IRsex19,
+             IRclass,
+             var,
+             var_detail,
+             response) %>%
+    drop_na(IRsex19, response) %>%
+    summarize(n = n()) %>%
+    ungroup() %>% 
+    select(-(var_detail)) %>% 
+    pivot_wider(names_from = var,
+                values_from = n) %>% 
+    rename(demo = IRsex19)
+  
+  b <- data %>%
+    filter({{items}}) %>%
+    group_by(tmds,
+             IRclass,
+             var,
+             var_detail,
+             response) %>% 
+    drop_na(tmds, response) %>%
+    summarize(n = n()) %>%
+    ungroup() %>% 
+    select(-(var_detail)) %>% 
+    pivot_wider(names_from = var,
+                values_from = n) %>% 
+    rename(demo = tmds) 
+  
+  c <- data %>%
+    filter({{items}}) %>%
+    group_by(firstgen,
+             IRclass,
+             var,
+             var_detail,
+             response) %>% 
+    drop_na(firstgen, response) %>%
+    summarize(n = n()) %>%
+    ungroup() %>% 
+    select(-(var_detail)) %>% 
+    pivot_wider(names_from = var,
+                values_from = n) %>% 
+    rename(demo = firstgen) 
+  
+  d <- data %>%
+    filter({{items}}) %>%
+    group_by(residency,
+             IRclass,
+             var,
+             var_detail,
+             response) %>% 
+    drop_na(response) %>%
+    summarize(n = n()) %>%
+    ungroup() %>% 
+    select(-(var_detail)) %>% 
+    pivot_wider(names_from = var,
+                values_from = n) %>% 
+    rename(demo = residency)  
+  
+  bind_rows(a, b, c, d) %>% 
+    replace(is.na(.), 0) %>% 
+    pivot_wider(names_from = IRclass,
+                values_from = -(1:3))
+}
+```
+
+```{r dbell-summary-table-1item-function}
+
+
+dbell_sum_tbl_1 <- function(data, item) {
+  
+  
+  a <- data %>%
+    filter(IRsex19 != "Unknown",
+           var == {{item}}) %>%
+    group_by(IRsex19,
+             IRclass,
+             var,
+             response) %>%
+    drop_na(IRsex19, response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = IRclass,
+                values_from = n) %>% 
+    rename(demo = IRsex19)
+  
+  b <- data %>%
+    filter(var == {{item}}) %>%
+    group_by(tmds,
+             IRclass,
+             var,
+             response) %>%
+    drop_na(tmds, response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = IRclass,
+                values_from = n) %>% 
+    rename(demo = tmds)
+  
+  c <- data %>%
+    filter(var == {{item}}) %>%
+    group_by(firstgen,
+             IRclass,
+             var,
+             response) %>%
+    drop_na(firstgen, response) %>%
+    
+    summarize(n = n()) %>%
+    pivot_wider(names_from = IRclass,
+                values_from = n) %>% 
+    rename(demo = firstgen)
+  
+  d <- data %>%
+    filter(var == {{item}}) %>%
+    group_by(residency,
+             IRclass,
+             var,
+             response) %>%
+    drop_na(response) %>%
+    summarize(n = n()) %>%
+    pivot_wider(names_from = IRclass,
+                values_from = n) %>% 
+    rename(demo = residency)
+  
+  bind_rows(a, b, c, d) %>% 
+    replace(is.na(.), 0) %>% 
+        group_by(demo) %>%
+    mutate(tot_fy = sum(`First Year`),
+           tot_sr = sum(Senior)) %>%
+    ungroup() %>%
+    mutate(pct_fy = `First Year` / tot_fy,
+           pct_sr = Senior / tot_sr) %>% 
+    select(-contains("tot"))
+}
+
+```
+
+```{r dbell-summary-table-2items-function}
+
+# function for areas w/ 2 questions
+
+dbell_sum_tbl_2 <- function(data, items, 
+                                   item1fy, item1sr, 
+                                   item2fy, item2sr) {
+  
+  dbell_sum_tbl_gen({{data}}, {{items}}) %>% 
+    group_by(demo) %>%
+    mutate(tot_1_fy = sum({{item1fy}}),
+           tot_1_sr = sum({{item1sr}}),
+           tot_2_fy = sum({{item2fy}}),
+           tot_2_sr = sum({{item2sr}})) %>%
+    ungroup() %>%
+    mutate(pct_1_fy = {{item1fy}} / tot_1_fy,
+           pct_1_sr = {{item1sr}} / tot_1_sr,
+           pct_2_fy = {{item2fy}} / tot_2_fy,
+           pct_2_sr = {{item2sr}} / tot_2_sr) %>%
+    select(-contains("tot")) 
+}  
+```
+
+```{r dbell-summary-table-3items-function}
+# create functions for item areas that have 1, 2, 3, or 5 questions of interest
+
+# function for areas w/ 3 questions
+dbell_sum_tbl_3 <- function(data, items, 
+                                   item1fy, item1sr, 
+                                   item2fy, item2sr, 
+                                   item3fy, item3sr) {
+  
+  dbell_sum_tbl_gen({{data}}, {{items}}) %>% 
+    group_by(demo) %>%
+    mutate(tot_1_fy = sum({{item1fy}}),
+           tot_1_sr = sum({{item1sr}}),
+           tot_2_fy = sum({{item2fy}}),
+           tot_2_sr = sum({{item2sr}}),
+           tot_3_fy = sum({{item3fy}}),
+           tot_3_sr = sum({{item3sr}})) %>%
+    ungroup() %>%
+    mutate(pct_1_fy = {{item1fy}} / tot_1_fy,
+           pct_1_sr = {{item1sr}} / tot_1_sr,
+           pct_2_fy = {{item2fy}} / tot_2_fy,
+           pct_2_sr = {{item2sr}} / tot_2_sr,
+           pct_3_fy = {{item3fy}} / tot_3_fy,
+           pct_3_sr = {{item3sr}} / tot_3_sr) %>%
+    select(-contains("tot"))
+  }  
+
+```
+
+```{r dbell-summary-table-4items-function}
+
+dbell_sum_tbl_4 <- function(data, items, 
+                                   item1fy, item1sr, 
+                                   item2fy, item2sr, 
+                                   item3fy, item3sr,
+                                   item4fy, item4sr) {
+  
+  dbell_sum_tbl_gen({{data}}, {{items}}) %>% 
+    group_by(demo) %>%
+    mutate(tot_1_fy = sum({{item1fy}}),
+           tot_1_sr = sum({{item1sr}}),
+           tot_2_fy = sum({{item2fy}}),
+           tot_2_sr = sum({{item2sr}}),
+           tot_3_fy = sum({{item3fy}}),
+           tot_3_sr = sum({{item3sr}}),
+           tot_4_fy = sum({{item4fy}}),
+           tot_4_sr = sum({{item4sr}})) %>%
+    ungroup() %>%
+    mutate(pct_1_fy = {{item1fy}} / tot_1_fy,
+           pct_1_sr = {{item1sr}} / tot_1_sr,
+           pct_2_fy = {{item2fy}} / tot_2_fy,
+           pct_2_sr = {{item2sr}} / tot_2_sr,
+           pct_3_fy = {{item3fy}} / tot_3_fy,
+           pct_3_sr = {{item3sr}} / tot_3_sr,
+           pct_4_fy = {{item4fy}} / tot_4_fy,
+           pct_4_sr = {{item4sr}} / tot_4_sr) %>%
+    select(-contains("tot"))
+} 
+
+```
+
+```{r dbell-summary-table-5items-function}
+
+# function for areas w/ 5 questions
+dbell_sum_tbl_5 <- function(data, items, 
+                                   item1fy, item1sr, 
+                                   item2fy, item2sr, 
+                                   item3fy, item3sr,
+                                   item4fy, item4sr,
+                                   item5fy, item5sr) {
+  
+  dbell_sum_tbl_gen({{data}}, {{items}}) %>% 
+    group_by(demo) %>%
+    mutate(tot_1_fy = sum({{item1fy}}),
+           tot_1_sr = sum({{item1sr}}),
+           tot_2_fy = sum({{item2fy}}),
+           tot_2_sr = sum({{item2sr}}),
+           tot_3_fy = sum({{item3fy}}),
+           tot_3_sr = sum({{item3sr}}),
+           tot_4_fy = sum({{item4fy}}),
+           tot_4_sr = sum({{item4sr}}),
+           tot_5_fy = sum({{item5fy}}),
+           tot_5_sr = sum({{item5sr}})) %>%
+    ungroup() %>%
+    mutate(pct_1_fy = {{item1fy}} / tot_1_fy,
+           pct_1_sr = {{item1sr}} / tot_1_sr,
+           pct_2_fy = {{item2fy}} / tot_2_fy,
+           pct_2_sr = {{item2sr}} / tot_2_sr,
+           pct_3_fy = {{item3fy}} / tot_3_fy,
+           pct_3_sr = {{item3sr}} / tot_3_sr,
+           pct_4_fy = {{item4fy}} / tot_4_fy,
+           pct_4_sr = {{item4sr}} / tot_4_sr,
+           pct_5_fy = {{item5fy}} / tot_5_fy,
+           pct_5_sr = {{item5sr}} / tot_5_sr) %>%
+    select(-contains("tot"))
+} 
+
+```
+
+```{r dumbbell-plot-functions}
+
+# dumbbell v1 (items on y-axis, faceted by FY/SR, color by demo)
+
+dumbbells_mult <- function(data, demographic, c, ttl, sbttl, cap) {
+  data %>% 
+    ggplot(aes(x = percent, 
+               y = reorder(var_detail, percent))) +
+    facet_wrap(~ IRclass) +
+    geom_line(aes(group = pair), 
+              color = "gray60") +
+    geom_point(aes(color = {{demographic}}), 
+               size = 5, 
+               alpha = .95, 
+               stroke = 0) +
+    coord_cartesian(xlim = c(0, .9)) +
+    scale_x_continuous(expand = c(0, 0),
+                       breaks = c(.1, .3, .5, .7),
+                       labels = scales::percent) +
+    scale_color_manual(values = {{c}}) + 
+    theme_minimal(15) +
+    theme(plot.title.position = "plot",
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          legend.position = "bottom",
+          legend.title = element_blank()) + 
+    labs(title = {{ttl}},
+         subtitle = {{sbttl}},
+         y = "",
+         x = "",
+         caption = {{cap}})
+}
+
+
+# dumbbell v2 (single item of interest, all student subgroups on on y-axis, color by FY/SR)
+
+dumbbells_single <- function(data, ttl, sbttl, cap) {
+  data %>% 
+    ggplot(aes(x = percent, 
+               y = reorder(demo, percent))) +
+    geom_line(aes(group = pair), 
+              color = "gray60") +
+    geom_point(aes(color = IRclass), 
+               size = 5, 
+               alpha = .95, 
+               stroke = 0) +
+    coord_cartesian(xlim = c(0, .9)) +
+    scale_x_continuous(expand = c(0, 0),
+                       breaks = c(.1, .3, .5, .7),
+                       labels = scales::percent) +
+    scale_color_manual(values = c_class) + 
+    theme_minimal(15) +
+    theme(plot.title.position = "plot",
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          legend.position = "bottom",
+          legend.title = element_blank()) + 
+    labs(title = {{ttl}},
+         subtitle = {{sbttl}},
+         y = "",
+         x = "",
+         caption = {{cap}})
+}
+
+```
+
+```{r dumbbell-summary-table-dd}
+
+table_dd <- dbell_sum_tbl_4(nsse_idr_long, startsWith(var, "DD"),
+                                   `DDrace_First Year`, DDrace_Senior, 
+                                   `DDeconomic_First Year`, DDeconomic_Senior, 
+                                   `DDreligion_First Year`, DDreligion_Senior,
+                                   `DDpolitical_First Year`, DDpolitical_Senior)
+
+#export(table_dd, here("data", "table_dd.xlsx"))
+```
+
+```{r dbell-summary-table-qi}
+
+table_qi <- dbell_sum_tbl_5(nsse_idr_long, startsWith(var, "QI"),
+                                   `QIstudent_First Year`, QIstudent_Senior, 
+                                   `QIadvisor_First Year`, QIadvisor_Senior, 
+                                   `QIfaculty_First Year`, QIfaculty_Senior,
+                                   `QIstaff_First Year`, QIstaff_Senior,
+                                   `QIadmin_First Year`, QIadmin_Senior)
+```
+
+```{r dbell-summary-table-se}
+
+table_se <- dbell_sum_tbl_gen(nsse_idr_long, startsWith(var, "SE")) %>% 
+  group_by(demo) %>% 
+  mutate(tot_1_fy = sum(`SEacademic_First Year`),
+         tot_1_sr = sum(SEacademic_Senior),
+         tot_2_fy = sum(`SElearnsup_First Year`),
+         tot_2_sr = sum(SElearnsup_Senior),
+         tot_3_fy = sum(`SEdiverse_First Year`),
+         tot_3_sr = sum(SEdiverse_Senior),
+         tot_4_fy = sum(`SEsocial_First Year`),
+         tot_4_sr = sum(SEsocial_Senior),
+         tot_5_fy = sum(`SEwellness_First Year`),
+         tot_5_sr = sum(SEwellness_Senior),
+         tot_6_fy = sum(`SEnonacad_First Year`),
+         tot_6_sr = sum(SEnonacad_Senior),
+         tot_7_fy = sum(`SEactivities_First Year`),
+         tot_7_sr = sum(SEactivities_Senior),
+         tot_8_fy = sum(`SEevents_First Year`),
+         tot_8_sr = sum(SEevents_Senior)) %>% 
+  ungroup() %>% 
+  mutate(pct_1_fy = `SEacademic_First Year` / tot_1_fy,
+         pct_1_sr = SEacademic_Senior / tot_1_sr,
+         pct_2_fy = `SElearnsup_First Year` / tot_2_fy,
+         pct_2_sr = SElearnsup_Senior / tot_2_sr,
+         pct_3_fy = `SEdiverse_First Year` / tot_3_fy,
+         pct_3_sr = SEdiverse_Senior / tot_3_sr,
+         pct_4_fy = `SEsocial_First Year` / tot_4_fy,
+         pct_4_sr = SEsocial_Senior / tot_4_sr,
+         pct_5_fy = `SEwellness_First Year` / tot_5_fy,
+         pct_5_sr = SEwellness_Senior / tot_5_sr,
+         pct_6_fy = `SEnonacad_First Year` / tot_6_fy,
+         pct_6_sr = SEnonacad_Senior / tot_6_sr,
+         pct_7_fy = `SEactivities_First Year` / tot_7_fy,
+         pct_7_sr = SEactivities_Senior / tot_7_sr,
+         pct_8_fy = `SEevents_First Year` / tot_8_fy,
+         pct_8_sr = SEevents_Senior / tot_8_sr) %>% 
+  select(-contains("tot"))
+
+```
+
+```{r dumbbell-summary-table-ri}
+
+table_ri <- dbell_sum_tbl_2(nsse_idr_long, startsWith(var, "RI"),
+                                   `RIsocietal_First Year`, RIsocietal_Senior,
+                                   `RIdiverse_First Year`, RIdiverse_Senior)
+```
+
+```{r dumbbell-summary-table-hip}
+
+table_hip <- dbell_sum_tbl_3(nsse_idr_long, (var == "leader" |
+                                                      var == "research" |
+                                                      var == "learncom"),
+                                    `leader_First Year`, leader_Senior, 
+                                    `research_First Year`, research_Senior, 
+                                    `learncom_First Year`, learncom_Senior)
+
+```
+
+```{r dumbbell-summary-table-nsse-core-singleitems}
+
+table_pgspeak <- dbell_sum_tbl_1(nsse_idr_long, "pgspeak")
+
+table_sbvalued <- dbell_sum_tbl_1(nsse_idr_long, "sbvalued")
+
+table_reading <- dbell_sum_tbl_1(nsse_idr_long, "reading")
+
+table_present <- dbell_sum_tbl_1(nsse_idr_long, "present")
+
+```
+
+```{r dbell-summary-table-cwp}
+
+table_cwp_plans <- dbell_sum_tbl_5(nsse_idr_long, (var == "CWPidea" | 
+                                                   var == "CWPclarify" |
+                                                   var == "CWPrelevant" |
+                                                   var == "CWPdescribe" |
+                                                   var == "CWPfeedback"),
+                                 `CWPidea_First Year`, CWPidea_Senior, 
+                                 `CWPclarify_First Year`, CWPclarify_Senior, 
+                                 `CWPrelevant_First Year`, CWPrelevant_Senior,
+                                 `CWPdescribe_First Year`, CWPdescribe_Senior,
+                                 `CWPfeedback_First Year`, CWPfeedback_Senior)
+
+table_cwp_inf <- dbell_sum_tbl_5(nsse_idr_long, 
+                                        (var == "CWPfamily" | 
+                                           var == "CWPhighschool" |
+                                           var == "CWPadvisor" |
+                                           var == "CWPcoach" | 
+                                           var == "CWPcocurrR"),
+                                        `CWPfamily_First Year`, CWPfamily_Senior, 
+                                        `CWPhighschool_First Year`, CWPhighschool_Senior, 
+                                        `CWPadvisor_First Year`, CWPadvisor_Senior,
+                                        `CWPcoach_First Year`, CWPcoach_Senior,
+                                        `CWPcocurrR_First Year`, CWPcocurrR_Senior)
+
+table_cwp_research <- dbell_sum_tbl_1(nsse_idr_long, "CWPresearch")
+
+
+
+```
+
+```{r dbell-summary-table-civ}
+ 
+table_civ_enc <- dbell_sum_tbl_2( nsse_idr_long, (var == "CIV03a19" | 
+                                                           var == "CIV03b19"),
+                                         `CIV03a19_First Year`, CIV03a19_Senior,
+                                         `CIV03b19_First Year`, CIV03b19_Senior)
+
+table_civ_loc <- dbell_sum_tbl_3(nsse_idr_long, (var == "CIV04a19" |
+                                                          var == "CIV04c19" |
+                                                          var == "CIV04i19"),
+                                        `CIV04a19_First Year`, CIV04a19_Senior, 
+                                        `CIV04c19_First Year`, CIV04c19_Senior, 
+                                        `CIV04i19_First Year`, CIV04i19_Senior)
+
+table_civ_inst <- dbell_sum_tbl_1(nsse_idr_long, "CIV02c19")
+
+```
+
+```{r gt-dbell-tbl-sum-dd}
+
+table_dd %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>% 
+  fmt_percent(starts_with("pct")) %>% 
+  tab_spanner(
+    label = "SES",
+    id = 1, 
+    columns = c(`DDeconomic_First Year`,
+                pct_1_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Political Ideology",
+    id = 2, 
+    columns = c(`DDpolitical_First Year`,
+                pct_2_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Race/Ethnicity",
+    id = 3, 
+    columns = c(`DDrace_First Year`,
+                pct_3_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Religious Beliefs",
+    id = 4, 
+    columns = c(`DDreligion_First Year`,
+                pct_4_fy)
+  ) %>% 
+  tab_spanner(
+    label = "SES",
+    id = 5, 
+    columns = c(DDeconomic_Senior,
+                pct_1_sr)
+  )  %>% 
+  tab_spanner(
+    label = "Political Ideology",
+    id = 6, 
+    columns = c(DDpolitical_Senior,
+                pct_2_sr)
+  ) %>%  
+  tab_spanner(
+    label = "Race/Ethnicity",
+    id = 7, 
+    columns = c(DDrace_Senior,
+                pct_3_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Religious Beliefs",
+    id = 8, 
+    columns = c(DDreligion_Senior,
+                pct_4_sr)
+  ) %>% 
+  tab_spanner(
+    label = "First Year",
+    columns = c(`DDeconomic_First Year`,
+                pct_1_fy,
+                `DDpolitical_First Year`,
+                pct_2_fy,
+                `DDrace_First Year`,
+                pct_3_fy,
+                `DDreligion_First Year`,
+                pct_4_fy),
+    level = 2
+  ) %>%  
+  tab_spanner(
+    label = "Senior",
+    columns = c(DDeconomic_Senior,
+                pct_1_sr,
+                DDpolitical_Senior,
+                pct_2_sr,
+                DDrace_Senior,
+                pct_3_sr,
+                DDreligion_Senior,
+                pct_4_sr),
+    level = 2
+  ) %>% 
+  cols_move(columns = c(`DDeconomic_First Year`,
+                                pct_1_fy,
+                                `DDpolitical_First Year`,
+                                pct_2_fy,
+                                `DDrace_First Year`,
+                                pct_3_fy,
+                                `DDreligion_First Year`,
+                                pct_4_fy ),
+            after = response) %>% 
+  cols_label(response = "Response by Demographic Group",
+             `DDeconomic_First Year` = "n",
+             pct_1_fy = "%",
+             `DDpolitical_First Year` = "n",
+             pct_2_fy = "%",
+             `DDrace_First Year` = "n",
+             pct_3_fy = "%",
+             `DDreligion_First Year` = "n",
+             pct_4_fy  = "%",
+             DDeconomic_Senior = "n",
+             pct_1_sr = "%",
+             DDpolitical_Senior = "n",
+             pct_2_sr = "%",
+             DDrace_Senior ="n",
+             pct_3_sr = "%",
+             DDreligion_Senior = "n",
+             pct_4_sr = "%",
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  c(`DDrace_First Year`, DDrace_Senior, 
+                 `DDeconomic_First Year`, DDeconomic_Senior, 
+                 `DDreligion_First Year`, DDreligion_Senior,
+                 `DDpolitical_First Year`, DDpolitical_Senior) 
+  ) %>% 
+  tab_style(style = cell_text(align = 'center'), 
+            locations = cells_column_labels()) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  )
+
+
+# opt_table_font(font = google_font("Noto Sans Mono")) # how to change font for entire table
+
+# fmt_pad_num(columns = contains("pct"), nsmall = 2) # how to decimal align percentages. Must use a mono font, which aren't easy to read. Result also appears oddly aligned
+  
+```
+
+```{r gt-dbell-tbl-sum-qi}
+
+table_qi %>%
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "Students",
+    id = 1,
+    columns = c(`QIstudent_First Year`,
+                pct_1_fy)
+  ) %>%
+  tab_spanner(
+    label = "Advisors",
+    id = 2,
+    columns = c(`QIadvisor_First Year`,
+                pct_2_fy)
+  ) %>%
+  tab_spanner(
+    label = "Faculty",
+    id = 3,
+    columns = c(`QIfaculty_First Year`,
+                pct_3_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Student Services",
+    id = 4, 
+    columns = c(`QIstaff_First Year`,
+                pct_4_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Admin",
+    id = 5, 
+    columns = c(`QIadmin_First Year`,
+                pct_5_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Students",
+    id = 6, 
+    columns = c(QIstudent_Senior,
+                pct_1_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Advisors",
+    id = 7, 
+    columns = c(QIadvisor_Senior,
+                pct_2_sr)
+  ) %>%  
+  tab_spanner(
+    label = "Faculty",
+    id = 8, 
+    columns = c(QIfaculty_Senior,
+                pct_3_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Student Services",
+    id = 9, 
+    columns = c(QIstaff_Senior,
+                pct_4_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Admin",
+    id = 10, 
+    columns = c(QIadmin_Senior,
+                pct_5_sr)
+  ) %>% 
+  tab_spanner(
+    label = "First Year",
+    columns = c(`QIstudent_First Year`,
+                pct_1_fy,
+                `QIadvisor_First Year`,
+                pct_2_fy,
+                `QIfaculty_First Year`,
+                pct_3_fy,
+                `QIstaff_First Year`,
+                pct_4_fy,
+                `QIadmin_First Year`,
+                pct_5_fy),
+    level = 2
+  ) %>%  
+  tab_spanner(
+    label = "Senior",
+    columns = c(QIstudent_Senior,
+                pct_1_sr,
+                QIadvisor_Senior,
+                pct_2_sr,
+                QIfaculty_Senior,
+                pct_3_sr,
+                QIstaff_Senior,
+                pct_4_sr,
+                QIadmin_Senior,
+                pct_5_sr),
+    level = 2
+  ) %>% 
+  cols_move(
+    columns = c(`QIstudent_First Year`,
+                pct_1_fy,
+                `QIadvisor_First Year`,
+                pct_2_fy,
+                `QIfaculty_First Year`,
+                pct_3_fy,
+                `QIstaff_First Year`,
+                pct_4_fy,
+                `QIadmin_First Year`,
+                pct_5_fy),
+    after = response
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic Group",
+    `QIstudent_First Year` = "n",
+    pct_1_fy = "%",
+    `QIadvisor_First Year` = "n",
+    pct_2_fy = "%",
+    `QIfaculty_First Year` = "n",
+    pct_3_fy = "%",
+    `QIstaff_First Year` = "n",
+    pct_4_fy  = "%",
+    `QIadmin_First Year` = "n",
+    pct_5_fy = "%",
+    QIstudent_Senior = "n",
+    pct_1_sr = "%",
+    QIadvisor_Senior = "n",
+    pct_2_sr = "%",
+    QIfaculty_Senior ="n",
+    pct_3_sr = "%",
+    QIstaff_Senior = "n",
+    pct_4_sr = "%",
+    QIadmin_Senior = "n",
+    pct_5_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  c( `QIstudent_First Year`, QIstudent_Senior, 
+                  `QIadvisor_First Year`, QIadvisor_Senior, 
+                  `QIfaculty_First Year`, QIfaculty_Senior,
+                  `QIstaff_First Year`, QIstaff_Senior,
+                  `QIadmin_First Year`, QIadmin_Senior) 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = 'center'), 
+    locations = cells_column_labels()
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70))
+
+```
+
+```{r gt-dbell-tbl-sum-se}
+
+table_se %>%
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  fmt_percent(starts_with("pct")) %>%
+  tab_spanner(
+    label = "Academic Success",
+    id = 1,
+    columns = c(`SEacademic_First Year`,
+                pct_1_fy)
+  ) %>%
+  tab_spanner(
+    label = "Learning Support",
+    id = 2,
+    columns = c(`SElearnsup_First Year`,
+                pct_2_fy)
+  ) %>%
+  tab_spanner(
+    label = "Diverse Interactions",
+    id = 3,
+    columns = c(`SEdiverse_First Year`,
+                pct_3_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Social Opportunities",
+    id = 4, 
+    columns = c(`SEsocial_First Year`,
+                pct_4_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Well-Being",
+    id = 5, 
+    columns = c(`SEwellness_First Year`,
+                pct_5_fy)
+  ) %>% 
+  tab_spanner(
+    label = "School/Life Balance",
+    id = 6, 
+    columns = c(`SEnonacad_First Year`,
+                pct_6_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Campus Events",
+    id = 7, 
+    columns = c(`SEactivities_First Year`,
+                pct_7_fy)
+  ) %>%     tab_spanner(
+    label = "Social Justive Events",
+    id = 8, 
+    columns = c(`SEevents_First Year`,
+                pct_8_fy)
+  ) %>%   
+  tab_spanner(
+    label = "Academic Success",
+    id = 9, 
+    columns = c(SEacademic_Senior,
+                pct_1_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Learning Support",
+    id = 10, 
+    columns = c(SElearnsup_Senior,
+                pct_2_sr
+    )
+  ) %>%  
+  tab_spanner(
+    label = "Diverse Interactions",
+    id = 11, 
+    columns = c(SEdiverse_Senior,
+                pct_3_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Social Opportunities",
+    id = 12, 
+    columns = c(SEsocial_Senior,
+                pct_4_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Well-Being",
+    id = 13, 
+    columns = c(SEwellness_Senior,
+                pct_5_sr)
+  ) %>% 
+  tab_spanner(
+    label = "School/Life Balance",
+    id = 14, 
+    columns = c(`SEnonacad_Senior`,
+                pct_6_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Campus Events",
+    id = 15, 
+    columns = c(`SEactivities_Senior`,
+                pct_7_sr)
+  ) %>%     tab_spanner(
+    label = "Social Justive Events",
+    id = 16, 
+    columns = c(`SEevents_Senior`,
+                pct_8_sr)
+  ) %>% 
+  tab_spanner(
+    label = "First Year",
+    columns = c(`SEacademic_First Year`,
+                pct_1_fy,
+                `SElearnsup_First Year`,
+                pct_2_fy,
+                `SEdiverse_First Year`,
+                pct_3_fy,
+                `SEsocial_First Year`,
+                pct_4_fy,
+                `SEwellness_First Year`,
+                pct_5_fy,
+                `SEnonacad_First Year`,
+                pct_6_fy,
+                `SEactivities_First Year`,
+                pct_7_fy,
+                `SEevents_First Year`,
+                pct_8_fy),
+    level = 2
+  ) %>%  
+  tab_spanner(
+    label = "Senior",
+    columns = c(SEacademic_Senior,
+                pct_1_sr,
+                SElearnsup_Senior,
+                pct_2_sr,
+                SEdiverse_Senior,
+                pct_3_sr,
+                SEsocial_Senior,
+                pct_4_sr,
+                SEwellness_Senior,
+                pct_5_sr,
+                SEnonacad_Senior,
+                pct_6_sr,
+                SEactivities_Senior,
+                pct_7_sr,
+                SEevents_Senior,
+                pct_8_sr),
+    level = 2
+  ) %>% 
+  cols_move(
+    columns = c(`SEacademic_First Year`,
+                pct_1_fy,
+                `SElearnsup_First Year`,
+                pct_2_fy,
+                `SEdiverse_First Year`,
+                pct_3_fy,
+                `SEsocial_First Year`,
+                pct_4_fy,
+                `SEwellness_First Year`,
+                pct_5_fy, 
+                `SEnonacad_First Year`,
+                pct_6_fy,
+                `SEactivities_First Year`,
+                pct_7_fy,
+                `SEevents_First Year`,
+                pct_8_fy),
+    after = response
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic Group",
+    `SEacademic_First Year` = "n",
+    pct_1_fy = "%",
+    `SElearnsup_First Year` = "n",
+    pct_2_fy = "%",
+    `SEdiverse_First Year` = "n",
+    pct_3_fy = "%",
+    `SEsocial_First Year` = "n",
+    pct_4_fy  = "%",
+    `SEwellness_First Year` = "n",
+    pct_5_fy = "%",
+    `SEnonacad_First Year` = "n",
+    pct_6_fy= "%",
+    `SEactivities_First Year` = "n",
+    pct_7_fy= "%",
+    `SEevents_First Year` = "n",
+    pct_8_fy= "%",
+    SEacademic_Senior = "n",
+    pct_1_sr = "%",
+    SElearnsup_Senior = "n",
+    pct_2_sr = "%",
+    SEdiverse_Senior ="n",
+    pct_3_sr = "%",
+    SEsocial_Senior = "n",
+    pct_4_sr = "%",
+    SEwellness_Senior = "n",
+    pct_5_sr = "%",
+    SEnonacad_Senior = "n",
+    pct_6_sr= "%",
+    SEactivities_Senior = "n",
+    pct_7_sr= "%",
+    SEevents_Senior = "n",
+    pct_8_sr= "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>%   
+  cols_align(
+    align = "center",
+    columns =  c(`SEacademic_First Year`, SEacademic_Senior,
+                 `SElearnsup_First Year`, SElearnsup_Senior,
+                 `SEdiverse_First Year`, SEdiverse_Senior,
+                 `SEsocial_First Year`, SEsocial_Senior,
+                 `SEwellness_First Year`, SEwellness_Senior,
+                 `SEnonacad_First Year`, SEnonacad_Senior,
+                 `SEactivities_First Year`, SEactivities_Senior,
+                 `SEevents_First Year`, SEevents_Senior) 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = 'center'), 
+    locations = cells_column_labels()) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(80))
+
+
+```
+
+
+```{r dumbbell-plot-colors}
+# all colors are from the viridis palettes (viridis, magma, plasma, inferno) and are color-blind friendly
+
+c_gender <- c("Male" = "#3e4989", "Female" = "#fb9b06") #purple, orange
+
+c_tmds <- c("TMDS" = "#f5d949", "Non-TMDS" = "#26828e") #yellow, teal
+  
+c_firstgen <- c("#6ece58","#440154") #green, dark purple
+  
+c_residency <- c("#365c8d", "#dfe318") #blue, chartreuse
+
+c_class <- c("#8c2369", "#35b779") #magenta, medium green
+
+```
+
+```{r dumbbell-plot-captions}
+
+note_gender <- "Note. Gender categories limited to male and female due to University of Oregon recordkeeping and to protect student privacy and confidentiality."
+
+note_tmds <- "Note. TMDS = Traditionally Marginalized Domestic Students. Race and ethnicity aggregated to protect studenty privacy and confidentiality."
+
+#note_firsgen <- NOT NECESSARY
+
+#note_residency <- NOT NECESSARY
+
+note_all <- "Note. TMDS = Traditionally Marginalized Domestic Students. Race and ethnicity aggregated to protect studenty privacy and confidentiality. Gender categories limited to male and female due to University of Oregon recordkeeping and to protect student privacy and confidentiality."
+  
+```
+
+```{r dumbbells-dd}
+
+# DD by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_dd(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+             c_gender,
+             "Discussions with Diverse Others: Gender",
+             "Percent of students who \"Often\" or \"Very Often\" had conversations wtih those differing in...",
+             note_gender) 
+
+# DD by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+            c_tmds,
+            "Discussions with Diverse Others: Race/Ethnicity",
+            "Percent of students who \"Often\" or \"Very Often\" had conversations wtih those differing in...",
+            note_tmds)
+
+# DD by first-gen status and class
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(firstgen) %>% 
+  drop_na(firstgen) %>% 
+  dumbbells_mult(firstgen,
+            c_firstgen,
+            "Discussions with Diverse Others: First-Generation Status",
+            "Percent of students who \"Often\" or \"Very Often\" had conversations wtih those differing in...",
+            "")
+
+# DD by res status and class
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(residency) %>% 
+  dumbbells_mult(residency,
+            c_residency,
+            "Discussions with Diverse Others: Residency Status",
+            "Percent of students who \"Often\" or \"Very Often\" had conversations wtih those differing in...",
+            "")
+
+```
+
+```{r dumbbells-qi}
+# QI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_qi(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                 c_gender,
+                 "Quality of Interactions: Gender",
+                 "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                 note_gender)
+
+
+# QI by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Quality of Interactions: Race/Ethnicity",
+                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                  note_tmds)
+
+# QI by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(firstgen) %>% 
+  drop_na(firstgen) %>% 
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Quality of Interactions: First-Generation Status",
+                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                  "")
+
+# QI by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(residency) %>% 
+  dumbbells_mult(residency,
+                  c_residency,
+                  "Quality of Interactions: Residency Status",
+                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                  "")
+  
+```
+
+```{r dumbbells-se}
+# SE by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_se(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                   "Supportive Environment: Gender",
+                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                   note_gender)
+
+
+# SE by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(tmds) %>%
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Supportive Environment: Student Race/Ethnicity",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                  note_tmds)
+
+# SE by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                   "Supportive Environment: First-Generation Status",
+                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                   "")
+
+
+# SE by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(residency) %>%
+  dumbbells_mult(residency,
+                  c_residency,
+                  "Supportive Environment: Residency Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                  "")
+
+
+```
+
+```{r dumbbells-ri}
+
+# RI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_ri(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "Reflective & Integrative Learning: Gender",
+                  "Percent of students who \"Often\" or \"Very Often\"...",
+                  note_gender)
+
+# RI by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Reflective & Integrative Learning: Race/Ethnicity",
+                  "Percent of students who \"Often\" or \"Very Often\"...",
+                  note_tmds) 
+
+# RI by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Reflective & Integrative Learning: First-Generation Status",
+                  "Percent of students who \"Often\" or \"Very Often\"...",
+                   "")
+
+
+# RI by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(residency) %>%
+  dumbbells_mult(residency,
+                  c_residency,
+                  "Reflective & Integrative Learning: Residency Status",
+                  "Percent of students who \"Often\" or \"Very Often\"...",
+                  "")
+
+```
+
+```{r dumbbells-hip}
+
+# HIP by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_hip(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "High-Impact Practices: Gender",
+                  "Percent of students who have or are planning to...",
+                  note_gender)
+
+# HIP by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "High-Impact Practices: Race/Ethnicity",
+                  "Percent of students who have or are planning to...",
+                  note_tmds) 
+
+# HIP by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "High-Impact Practices: First-Generation Status",
+                  "Percent of students who have or are planning to...",
+                   "")
+
+
+# HIP by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "High-Impact Practices: Residency Status",
+                 "Percent of students who have or are planning to...",
+                 "")
+
+```
+
+```{r dumbbells-pg}
+
+pg_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("pgspeak", IRsex19)
+
+pg_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("pgspeak", tmds) %>% 
+  drop_na(demo)
+
+pg_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("pgspeak", firstgen) %>% 
+  drop_na(demo)
+
+pg_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("pgspeak", residency) 
+
+bind_rows(pg_g, pg_tmds,
+          pg_firstgen, pg_residency) %>% 
+  mutate(
+    total = sum(`Very little`, `Some`, 
+                `Quite a bit`, `Very much`, na.rm = TRUE),
+    ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>% 
+  dumbbells_single(
+    "Perceived Gains in Verbal Communication",
+    "Percent of students who felt \"Quite a bit\" or \"Very much\" that their experience at UO contributed to their skills and development with speaking clearly and effectively" ,
+    "Note. insert all notes here")
+
+```
+
+```{r dumbbells-sb}
+
+# sense of belonging
+
+sb_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("sbvalued", IRsex19)
+
+sb_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("sbvalued", tmds) %>% 
+  drop_na(demo)
+
+sb_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("sbvalued", firstgen) %>% 
+  drop_na(demo)
+
+sb_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("sbvalued", residency) 
+
+bind_rows(sb_g, sb_tmds,
+          sb_firstgen, sb_residency) %>% 
+  mutate(
+    total = sum(`Strongly disagree`, `Disagree`, 
+                `Agree`, `Strongly agree`, na.rm = TRUE), 
+    ovo = sum(`Agree`, `Strongly agree`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>% 
+  dumbbells_single("Sense of Belonging",
+                   "Percent of students who \"Agreed\" or \"Strongly agreed\" that they felt valued by UO" ,
+                   note_all)
+
+```
+
+```{r dumbbells-academic-challenge-reading}
+ 
+# academic challenge: time spent reading of all time spent in preparation for class each week
+
+reading_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("reading", IRsex19)
+
+reading_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("reading", tmds) %>% 
+  drop_na(demo)
+
+reading_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("reading", firstgen) %>% 
+  drop_na(demo)
+
+reading_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("reading", residency) 
+
+bind_rows(reading_g, reading_tmds,
+          reading_firstgen, reading_residency) %>% 
+  mutate(
+    total = sum(`Very little`, `Some`, 
+                `About half`, `Most`, `Almost all`, na.rm = TRUE), # AMY - this will be associated with some majors more than others - is that part of the rationale?
+    ovo = sum(`Most`, `Almost all`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>%  
+  dumbbells_single("Proportion of Time Spent Reading for Courses",
+                   "Percent of students who spent \"Most\" or \"Almost all\" of their weekly course preparation timeon assigned reading..." ,
+                   note_all)
+
+```
+
+```{r dumbbells-academic-challenge-present}
+
+# academic challenge: frequency of course presentations in the past year
+
+present_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("present", IRsex19)
+
+present_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("present", tmds) %>% 
+  drop_na(demo)
+
+present_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("present", firstgen) %>% 
+  drop_na(demo)
+
+present_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("present", residency) 
+
+bind_rows(present_g, present_tmds,
+          present_firstgen, present_residency) %>% ## AMY -- For seniors, could this be related to major?
+  mutate(
+    total = sum(`Never`, `Sometimes`, `Often`, `Very often`, na.rm = TRUE), 
+    ovo = sum(`Often`, `Very often`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>% 
+  dumbbells_single("In-Class Presentations", 
+                   "Percent of students who \"Often\" or \"Very often\" gave course presentations..." ,
+                   note_all)
+
+```
+
+```{r dumbbells-cp}
+
+# CP by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cp(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "Career Plans: Gender",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
+                  note_gender)
+
+# CP by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Career Plans: Race/Ethnicity",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
+                  note_tmds) 
+
+# CP by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Career Plans: First-Generation Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
+                   "")
+
+
+# CP by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "Career Plans: Residency Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
+                 "")
+
+```                                                
+
+```{r dumbbells-cpi}
+
+# CPI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cpi(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "Career Plan Influences: Gender",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
+                  note_gender)
+
+# CPI by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Career Plan Influences: Race/Ethnicity",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
+                 note_tmds) 
+
+# CPI by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Career Plan Influences: First-Generation Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
+                 "")
+
+
+# CPI by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "Career Plan Influences: Residency Status",
+                 "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
+                 "")
+
+
+```
+
+```{r dumbbells-career-research}
+
+# CWP module: frequency of career preparation activities *during courese*
+
+cresearch_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("CWPresearch", IRsex19)
+
+cresearch_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("CWPresearch", tmds) %>% 
+  drop_na(demo)
+
+cresearch_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("CWPresearch", firstgen) %>% 
+  drop_na(demo)
+
+cresearch_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("CWPresearch", residency) 
+
+bind_rows(cresearch_g, cresearch_tmds,
+          cresearch_firstgen, cresearch_residency) %>% 
+  mutate(
+    total = sum(`Never`, `Sometimes`, `Often`, `Very often`, na.rm = TRUE), 
+    ovo = sum(`Often`, `Very often`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>% 
+  dumbbells_single("Career Research", 
+                   "Percent of students who \"Often\" or \"Very often\" researched a career interest, potential employer, or the job market as part of a course at UO..." ,
+                   note_all)
+
+```
+
+```{r dumbbells-civ-encouragement}
+
+# CIVE by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cive(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "Civic Engagement Encouragement: Gender",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
+                  note_gender)
+
+# CIVE by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Civic Engagement Encouragement: Race/Ethnicity",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
+                 note_tmds) 
+
+# CIVE by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Civic Engagement Encouragement: First-Generation Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
+                 "")
+
+
+# CIVE by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "Civic Engagement Encouragements: Residency Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
+                 "")
+
+```
+
+```{r dumbbells-civ-localissues}
+
+# CIVL by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_civl(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                  "Involvement with Campus and Local Issues: Gender",
+                  "Percent of students who felt \"Often\" or \"Very Often\"...",
+                  note_gender)
+
+# CIVL by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Involvement with Campus and Local Issues: Race/Ethnicity",
+                  "Percent of students who felt \"Often\" or \"Very Often\"...",
+                 note_tmds) 
+
+# CIVL by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                  "Involvement with Campus and Local Issues: First-Generation Status",
+                  "Percent of students who felt \"Often\" or \"Very Often\"...",
+                 "")
+
+
+# CIVL by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "Involvement with Campus and Local Issues: Residency Status",
+                  "Percent of students who felt \"Often\" or \"Very Often\"...",
+                 "")
+
+```
+
+```{r dumbbells-civ-conflict-res}
+# CIVCR by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_civcr(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                 c_gender,
+                 "Ability with Conflict Resolution: Gender",
+                 "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
+                 note_gender)
+
+# CIVCR by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(tmds) %>% 
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                 c_tmds,
+                 "Ability with Conflict Resolution: Race/Ethnicity",
+                 "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
+                 note_tmds) 
+
+# CIVCR by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                 c_firstgen,
+                 "Ability with Conflict Resolution: First-Generation Status",
+                 "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
+                 "")
+
+
+# CIVCR by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(residency) %>%
+  dumbbells_mult(residency,
+                 c_residency,
+                 "Ability with Conflict Resolution: Residency Status",
+                 "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
+                 "")
+```
+
+```{r dumbbells-civ-inst-emphasis}
+
+# CIV module: institutional emphasis on being an informed and active citizen
+
+civie_g <- nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_single("CIV02c19", IRsex19)
+
+civie_tmds <- nsse_idr_long %>% 
+  dumbbellprep_single("CIV02c19", tmds) %>% 
+  drop_na(demo)
+
+civie_firstgen <- nsse_idr_long %>% 
+  dumbbellprep_single("CIV02c19", firstgen) %>% 
+  drop_na(demo)
+
+civie_residency <- nsse_idr_long %>% 
+  dumbbellprep_single("CIV02c19", residency) 
+
+bind_rows(civie_g, civie_tmds,
+          civie_firstgen, civie_residency) %>% 
+  mutate(
+    total = sum(`Very little`, `Some`, 
+                `Quite a bit`, `Very much`, na.rm = TRUE), 
+    ovo = sum(`Quite a bit`, `Very much`, na.rm = TRUE),
+    percent = (ovo / total),
+    pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Non-First Gen' ~ '6',
+      demo == 'Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8')) %>% 
+  dumbbells_single("Civic Engagement: Institutional Emphasis", 
+                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized being an informed and active citizen..." ,
+                   note_all)
+
+
+
+```
+
+#### Table Prep
+
+```{r dumbbells-dd}
+
+# DD by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_dd(IRsex19) 
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(firstgen) %>% 
+  drop_na(firstgen) 
+
+
+nsse_idr_long %>% 
+  dumbbellprep_dd(residency)
+
+# QI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_qi(IRsex19)
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(firstgen) %>% 
+  drop_na(firstgen)
+
+nsse_idr_long %>% 
+  dumbbellprep_qi(residency)
+
+# SE by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_se(IRsex19)
+
+
+nsse_idr_long %>% 
+  dumbbellprep_se(tmds) %>%
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_se(firstgen) %>% 
+  drop_na(firstgen)
+
+nsse_idr_long %>% 
+  dumbbellprep_se(residency)
+
+
+# RI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_ri(IRsex19) 
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(firstgen) %>% 
+  drop_na(firstgen)
+
+nsse_idr_long %>% 
+  dumbbellprep_ri(residency) 
+
+# HIP by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_hip(IRsex19)
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(tmds) %>% 
+  drop_na(tmds) 
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(firstgen) %>% 
+  drop_na(firstgen)
+
+nsse_idr_long %>% 
+  dumbbellprep_hip(residency) 
+
+
+# PG
+
+pg_table <- bind_rows(pg_g, pg_tmds,
+          pg_firstgen, pg_residency)
+
+# sense of belonging
+
+sb_table <- bind_rows(sb_g, sb_tmds,
+          sb_firstgen, sb_residency) 
+ 
+# academic challenge: time spent reading of all time spent in preparation for class each week
+
+reading_table <- bind_rows(reading_g, reading_tmds,
+          reading_firstgen, reading_residency) 
+
+# academic challenge: frequency of course presentations in the past year
+
+present_table <- bind_rows(present_g, present_tmds,
+          present_firstgen, present_residency)
+
+# CP by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cp(IRsex19) 
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(firstgen) %>% 
+  drop_na(firstgen) 
+
+nsse_idr_long %>% 
+  dumbbellprep_cp(residency)
+
+# CPI by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cpi(IRsex19) 
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(firstgen) %>% 
+  drop_na(firstgen) 
+
+nsse_idr_long %>% 
+  dumbbellprep_cpi(residency) 
+
+# CWP module: frequency of career preparation activities *during courese*
+
+cresearch_table <- bind_rows(cresearch_g, cresearch_tmds,
+          cresearch_firstgen, cresearch_residency) 
+
+# CIVE by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_cive(IRsex19)
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(tmds) %>% 
+  drop_na(tmds)
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(firstgen) %>% 
+  drop_na(firstgen) 
+
+nsse_idr_long %>% 
+  dumbbellprep_cive(residency)
+
+# CIVL by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_civl(IRsex19)
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(tmds) %>% 
+  drop_na(tmds) 
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(firstgen) %>% 
+  drop_na(firstgen) 
+
+nsse_idr_long %>% 
+  dumbbellprep_civl(residency)
+
+# CIVCR by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_civcr(IRsex19) 
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(tmds) %>% 
+  drop_na(tmds) 
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(firstgen) %>% 
+  drop_na(firstgen)
+
+
+# CIVCR by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_civcr(residency)
+
+# CIV module: institutional emphasis on being an informed and active citizen
+
+civie_table <- bind_rows(civie_g, civie_tmds,
+          civie_firstgen, civie_residency) 
+
+```
+
+
+#### End Table Prep
+
+```{r dumbbells-master-tables}
+
+# SE by gender and class
+
+nsse_idr_long %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  dumbbellprep_se(IRsex19) %>% 
+  dumbbells_mult(IRsex19,
+                  c_gender,
+                   "Supportive Environment: Gender",
+                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                   note_gender)
+
+
+# SE by race/eth and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(tmds) %>%
+  drop_na(tmds) %>% 
+  dumbbells_mult(tmds,
+                  c_tmds,
+                  "Supportive Environment: Student Race/Ethnicity",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                  note_tmds)
+
+# SE by first-gen and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(firstgen) %>% 
+  drop_na(firstgen) %>%
+  dumbbells_mult(firstgen,
+                  c_firstgen,
+                   "Supportive Environment: First-Generation Status",
+                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                   "")
+
+
+# SE by residency and class
+
+nsse_idr_long %>% 
+  dumbbellprep_se(residency) %>%
+  dumbbells_mult(residency,
+                  c_residency,
+                  "Supportive Environment: Residency Status",
+                  "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
+                  "")
+
+
+
+
+# 3-way contingency tables calculating counts of responses to specified items x demographic group x class. Copied and pasted output into Excel for further formatting and organization.
+
+
+dd <- ftable(nsse_chr_wide$IRsex19, nsse_chr_wide$IRclass, nsse_chr_wide$DDrace)
+ftable(nsse_idr_wide_chr$tmds, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+ftable(nsse_idr_wide_chr$firstgen, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+ftable(nsse_idr_wide_chr$residency, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+
+
+
+
+ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDeconomic)
+ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDreligion)
+ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDpolitical)
+
+
+```
+
+
+
+```{r exploring}
+# Doing a little exploring
+
+# self-reported gender to examine if cell sizes are viable
+
+gender_selfrep_DDrace <- data_orig_full %>% 
+  group_by(IRclass, genderid, DDrace) %>% 
+  summarize(n = n()) 
+
+# prelim exploration of other variables
+
+data_factorized %>% 
+  group_by(IRrace) %>% 
+  summarize(n = n()) 
+
+data_factorized %>% 
+  group_by(re_all19) %>% 
+  summarize(n = n()) 
+
+data_factorized %>% 
+  group_by(IRsex19) %>% 
+  summarize(n = n())
+
+data_factorized %>% 
+  ggplot(aes(x = DDrace)) +
+  geom_bar() + 
+  facet_wrap("IRrace") 
+
+
+```
+
+```{r tables}
+data_factorized %>% 
+  select(studentid,
+         IRrace,
+         IRclass,
+         IRsex19,
+         firstgen,
+         DDrace, 
+         DDeconomic,
+         DDreligion,
+         DDpolitical) %>% 
+  filter(IRclass ==
+    group_by(IRsex19,
+           IRclass,
+           DDrace) %>% 
+  summarize(n = n())
+
+con <- xtabs(~ DDrace + IRsex19 + IRclass, data = nsse_idr_wide_chr) %>% 
+  as_tibble()
+
+ftable(con)
+
+data_factorized %>% 
+  group_by(IRclass) %>% 
+  summarize(n = n())
+
+ddracexgender <- ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace) %>%
+  as_tibble() %>% 
+  mutate(source = "ddrace")
+```
+
+
+``
+
+```{r likert-bars-a}
+
+## AMY: (1) join NSSE data with wide dataset, (2) rename CWP and CIV vars
+
+data <- nsse_fct_wide %>% 
+  select(IRsex19, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  filter(IRsex19 != "Unknown" & IRclass == "Freshman (1st year)") %>% 
+  rename(
+    "Race/ethnicity" = DDrace,
+    "SES" = DDeconomic,
+    "Religious beliefs" = DDreligion,
+    "Political ideology" = DDpolitical,
+    "Students" = QIstudent,
+    "Advisors" = QIadvisor,
+    "Faculty" = QIfaculty,
+    "Student services" = QIstaff,
+    "Admin" = QIadmin,
+    "Support for succeeding academically" = SEacademic,
+    "Using learning support services" = SElearnsup,
+    "Encouraging diverse interactions" = SEdiverse,
+    "Opportunities for social inolvement" = SEsocial,
+    "Support for well-being" = SEwellness,
+    "Help managing work/school/life balance" = SEnonacad,
+    "Attending campus activities/events" = SEactivities,
+    "Attending social justice events" = SEevents,
+    "Given a course presentation" = present,
+    "Connected learning to societal problems or issues" = RIsocietal,
+    "Included diverse perspectives in course discussions or assignments" = RIdiverse,
+    "Hold a leadership role in a student organization/group" = leader,
+    "Work with faculty on a research project" = research,                                                                                                                                                                                                                    
+    "Participate in a learning community" = learncom) %>% as.data.frame()  
+
+
+
+str(data)
+summary(data)
+
+likdata <- likert(data[,3:6], grouping = data$IRsex19)
+
+
+plot(likdata, type = "bar") + 
+  labs(title = "Conversations with those differing in...") + 
+  theme (legend.title = element_blank())
+```
+
+```{r likert-bars-b}
+
+# data2 <- data_factorized %>% 
+#   select(DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+#   as.data.frame()
+# 
+# ddgendergroups <- data$IRsex19
+# plot_likert(data, groups = ddgendergroups)
+
+```
+
+```{r }
+data_chr %>% 
+  group_by(IRsex19, IRclass, DDrace) %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  summarize(n = n()) %>% 
+  pivot_wider(names_from = DDrace, values_from = n)
+
+) 
+
+```
+

@@ -1,0 +1,199 @@
+---
+title: "NSSE 2022 Analysis"
+author: "Amy N. Warnock"
+date: "2022-09-08"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# install.packages("here")
+# install.packages("tidyverse")
+# install.packages("janitor")
+# install.packages("rio")
+# install.packages("colorblindr")
+# install.packages("scales")
+# install.packages("wesanderson")
+# install.packages("ggridges")
+#install.packages("Rfast")
+#install.packages("MASS")
+#install.packages("likert")
+#install.packages("psych")
+#install.packages("haven")
+
+#library(colorblindr)
+#library(psych)
+
+library(here)
+library(tidyverse)
+library(janitor)
+library(rio)
+library(scales)
+library(wesanderson)
+library(ggridges)
+library(Rfast)
+library(likert)
+library(haven)
+```
+
+```{r load-data}
+
+data_orig <- import(here("data", "NSSE22 Data (UO).sav"), 
+                    setclass = "tbl_df") 
+
+head(data_orig)
+
+data_factorized <- data_orig %>% 
+  factorize()
+
+head(data_factorized)
+
+data_chr <- data_orig %>% 
+  characterize()
+
+head(data_chr)
+
+```
+
+
+```{r density-ridges}
+
+# noodling
+data_orig %>% 
+  ggplot(aes(x = DDrace, y = factor(IRrace))) +
+  geom_density_ridges()
+
+# density ridges of discussions w/ others from a different race/ethnicity background by race/eth of participants and class
+data_factorized %>%
+  ggplot(aes(x = as.numeric(DDrace), y = IRrace)) +
+  geom_density_ridges(aes(fill = IRclass),
+                      alpha = .65,
+                      color = "white") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("Chevalier1", n = 2, type = "discrete")) +
+  scale_x_continuous(expand = c(0,0),
+                     breaks = c(1, 2, 3, 4),
+                     labels = c("Never", "Sometimes", "Often", "Very Often")) +
+  scale_y_discrete(expand = c(0,0))
+
+
+
+#   labs(title = "")
+#  theme(plot.title.position = "plot",
+#         panel.grid.major.y = element_blank(),
+#         panel.grid.minor.y = element_blank(),
+#         panel.grid.minor.x = element_blank(),
+#         legend.position = "right",
+#         legend.title = element_blank())
+
+
+# data_factorized %>%
+#   ggplot(aes(x = as.numeric(DDrace), y = IRrace)) +
+#   geom_density_ridges(aes(fill = IRclass),
+#                       alpha = .5,
+#                       color = "white") +
+#   theme_minimal() +
+#   scale_fill_manual(values = wes_palette("Darjeeling2", n = 2, type = "discrete"))
+# 
+# 
+# data_orig %>% 
+#   ggplot(aes(x = as.numeric(DDrace), y = reorder(IRrace, DDrace))) +
+#   geom_density_ridges(aes(fill = IRclass),
+#                       alpha = .5, 
+#                       color = "white") +
+#   theme_minimal() +
+#   scale_fill_manual(values = wes_palette("Darjeeling2", n = 2, type = "discrete"))
+```
+
+
+```{r}
+data_chr %>% 
+  group_by(IRsex19, IRclass, DDrace) %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  summarize(n = n()) %>% 
+  pivot_wider(names_from = DDrace, values_from = n)
+
+# density ridges of conversations w/ diverse others (all items) by gender + class
+data_factorized %>% 
+  select(studentid, IRsex19, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>% 
+  ggplot(aes(x = as.numeric(response), y = item)) +
+  geom_density_ridges(aes(fill = IRsex19),
+                      alpha = .5, 
+                      color = "white") +
+  facet_wrap(~ IRclass) +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("Darjeeling2", n = 2, type = "discrete"))
+
+# table of counts
+data_factorized %>% 
+  select(studentid, IRsex19, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>% 
+  group_by(IRsex19, IRclass, item, response) %>%
+  summarize(n = n()) %>%
+  drop_na()
+
+# conversations w/ diverse others (all items) by race/eth and class
+data_factorized %>% 
+  select(studentid, IRrace, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>% 
+  ggplot(aes(x = as.numeric(response), y = item)) +
+  geom_density_ridges(aes(fill = IRrace),
+                      alpha = .5, 
+                      color = "white") +
+  facet_wrap(~ IRclass) +
+  theme_minimal() 
+
+# conversations w/ diverse others - race/eth (two categories to simulate future binning) w/ items as colors
+data_factorized %>% 
+  select(studentid, IRrace, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  filter(IRrace == "White" | IRrace == "Hispanic or Latino") %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>% 
+  ggplot(aes(x = as.numeric(response), y = item)) +
+  geom_density_ridges(aes(fill = IRrace),
+                      alpha = .5, 
+                      color = "white") +
+  facet_wrap(~ IRclass) +
+  theme_minimal()
+
+
+# conversations w/ diverse others - all race/eth w/ items as colors
+data_factorized %>% 
+  select(studentid, IRrace, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>% 
+  ggplot(aes(x = as.numeric(response), y = IRrace)) +
+  geom_density_ridges(aes(fill = item),
+                      alpha = .5, 
+                      color = "white") +
+  facet_wrap(~ IRclass) +
+  theme_minimal() 
+
+# conversations w/ diverse others - first gen w/ items as colors
+data_factorized %>% 
+  select(studentid, firstgen, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  pivot_longer(cols = starts_with("DD"), 
+               names_to = "item",
+               values_to = "response") %>%
+  drop_na() %>% 
+  ggplot(aes(x = as.numeric(response), y = item)) +
+  geom_density_ridges(aes(fill = IRclass),
+                      alpha = .5, 
+                      color = "white") +
+  facet_wrap(~ firstgen) +
+  theme_minimal() 
+
+```
+
