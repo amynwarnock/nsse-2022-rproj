@@ -1017,11 +1017,12 @@ table_civ_inst <- dbell_sum_tbl_1(nsse_idr_long, "CIV02c19")
 
 ```
 
-```{r gt-dbell-tbl-sum-dd}
+```{r gt-dbell-summary-table-dd}
 
 table_dd %>% 
   gt(groupname_col = "demo",
      rowname_col = "rowname") %>% 
+  tab_header(title = "Discussion with Diverse Others") %>% 
   fmt_percent(starts_with("pct")) %>% 
   tab_spanner(
     label = "SES",
@@ -1102,9 +1103,9 @@ table_dd %>%
                                 `DDrace_First Year`,
                                 pct_3_fy,
                                 `DDreligion_First Year`,
-                                pct_4_fy ),
+                                pct_4_fy),
             after = response) %>% 
-  cols_label(response = "Response by Demographic Group",
+  cols_label(response = "Response by Demographic",
              `DDeconomic_First Year` = "n",
              pct_1_fy = "%",
              `DDpolitical_First Year` = "n",
@@ -1120,7 +1121,7 @@ table_dd %>%
              DDrace_Senior ="n",
              pct_3_sr = "%",
              DDreligion_Senior = "n",
-             pct_4_sr = "%",
+             pct_4_sr = "%"
   ) %>% 
   cols_align(
     align = "right",
@@ -1128,17 +1129,23 @@ table_dd %>%
   ) %>% 
   cols_align(
     align = "center",
-    columns =  c(`DDrace_First Year`, DDrace_Senior, 
-                 `DDeconomic_First Year`, DDeconomic_Senior, 
-                 `DDreligion_First Year`, DDreligion_Senior,
-                 `DDpolitical_First Year`, DDpolitical_Senior) 
+    columns =  3:18
   ) %>% 
-  tab_style(style = cell_text(align = 'center'), 
-            locations = cells_column_labels()) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+     3:18
+    )
+  ) %>%  
   cols_width(
     response ~ px(150),
     everything() ~ px(70)
-  )
+  ) %>% 
+  opt_align_table_header(align = "left")
 
 
 # opt_table_font(font = google_font("Noto Sans Mono")) # how to change font for entire table
@@ -1147,116 +1154,117 @@ table_dd %>%
   
 ```
 
-```{r gt-dbell-tbl-sum-qi}
+```{r gt-dbell-summary-table-qi}
 
 table_qi %>%
   gt(groupname_col = "demo",
      rowname_col = "rowname") %>%
+  tab_header(title = "Quality of Interactions") %>% 
   fmt_percent(starts_with("pct")
   ) %>%
   tab_spanner(
-    label = "Students",
+    label = "Admin",
     id = 1,
-    columns = c(`QIstudent_First Year`,
+    columns = c(3,
                 pct_1_fy)
   ) %>%
   tab_spanner(
     label = "Advisors",
     id = 2,
-    columns = c(`QIadvisor_First Year`,
+    columns = c(5,
                 pct_2_fy)
   ) %>%
   tab_spanner(
     label = "Faculty",
     id = 3,
-    columns = c(`QIfaculty_First Year`,
+    columns = c(7,
                 pct_3_fy)
   ) %>% 
   tab_spanner(
     label = "Student Services",
     id = 4, 
-    columns = c(`QIstaff_First Year`,
+    columns = c(9,
                 pct_4_fy)
   ) %>% 
   tab_spanner(
-    label = "Admin",
+    label = "Students",
     id = 5, 
-    columns = c(`QIadmin_First Year`,
+    columns = c(11,
                 pct_5_fy)
   ) %>% 
   tab_spanner(
-    label = "Students",
+    label = "Admin",
     id = 6, 
-    columns = c(QIstudent_Senior,
+    columns = c(4,
                 pct_1_sr)
   ) %>% 
   tab_spanner(
     label = "Advisors",
     id = 7, 
-    columns = c(QIadvisor_Senior,
+    columns = c(6,
                 pct_2_sr)
   ) %>%  
   tab_spanner(
     label = "Faculty",
     id = 8, 
-    columns = c(QIfaculty_Senior,
+    columns = c(8,
                 pct_3_sr)
   ) %>% 
   tab_spanner(
     label = "Student Services",
     id = 9, 
-    columns = c(QIstaff_Senior,
+    columns = c(10,
                 pct_4_sr)
   ) %>% 
   tab_spanner(
-    label = "Admin",
+    label = "Students",
     id = 10, 
-    columns = c(QIadmin_Senior,
+    columns = c(12,
                 pct_5_sr)
   ) %>% 
   tab_spanner(
     label = "First Year",
-    columns = c(`QIstudent_First Year`,
+    columns = c(3,
                 pct_1_fy,
-                `QIadvisor_First Year`,
+                5,
                 pct_2_fy,
-                `QIfaculty_First Year`,
+                7,
                 pct_3_fy,
-                `QIstaff_First Year`,
+                9,
                 pct_4_fy,
-                `QIadmin_First Year`,
+                11,
                 pct_5_fy),
     level = 2
   ) %>%  
   tab_spanner(
     label = "Senior",
-    columns = c(QIstudent_Senior,
+    columns = c(4,
                 pct_1_sr,
-                QIadvisor_Senior,
+                6,
                 pct_2_sr,
-                QIfaculty_Senior,
+                8,
                 pct_3_sr,
-                QIstaff_Senior,
+                10,
                 pct_4_sr,
-                QIadmin_Senior,
+                12,
                 pct_5_sr),
     level = 2
   ) %>% 
   cols_move(
-    columns = c(`QIstudent_First Year`,
+    columns = c(3,
                 pct_1_fy,
-                `QIadvisor_First Year`,
+                5,
                 pct_2_fy,
-                `QIfaculty_First Year`,
+                7,
                 pct_3_fy,
-                `QIstaff_First Year`,
+                9,
                 pct_4_fy,
-                `QIadmin_First Year`,
+                11,
                 pct_5_fy),
     after = response
   ) %>% 
   cols_label(
-    response = "Response by Demographic Group",
+    response = "Response by Demographic",
     `QIstudent_First Year` = "n",
     pct_1_fy = "%",
     `QIadvisor_First Year` = "n",
@@ -1290,178 +1298,195 @@ table_qi %>%
                   `QIstaff_First Year`, QIstaff_Senior,
                   `QIadmin_First Year`, QIadmin_Senior) 
   ) %>% 
+    cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:22 
+  ) %>% 
   tab_style(
-    style = cell_text(align = 'center'), 
+    style = cell_text(align = "left"), 
     locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+     3:22 
+    )
   ) %>% 
   cols_width(
     response ~ px(150),
-    everything() ~ px(70))
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
 
 ```
 
-```{r gt-dbell-tbl-sum-se}
+```{r gt-dbell-summary-table-se}
 
 table_se %>%
   gt(groupname_col = "demo",
      rowname_col = "rowname") %>%
+  tab_header(title = "Supportive Environment") %>% 
   fmt_percent(starts_with("pct")) %>%
   tab_spanner(
     label = "Academic Success",
     id = 1,
-    columns = c(`SEacademic_First Year`,
+    columns = c(3,
                 pct_1_fy)
   ) %>%
   tab_spanner(
-    label = "Learning Support",
+    label = "Campus Activities",
     id = 2,
-    columns = c(`SElearnsup_First Year`,
+    columns = c(5,
                 pct_2_fy)
   ) %>%
   tab_spanner(
     label = "Diverse Interactions",
     id = 3,
-    columns = c(`SEdiverse_First Year`,
+    columns = c(7,
                 pct_3_fy)
   ) %>% 
   tab_spanner(
-    label = "Social Opportunities",
+    label = "Social Justive Events",
     id = 4, 
-    columns = c(`SEsocial_First Year`,
+    columns = c(9,
                 pct_4_fy)
   ) %>% 
   tab_spanner(
-    label = "Well-Being",
+    label = "Learning Support",
     id = 5, 
-    columns = c(`SEwellness_First Year`,
+    columns = c(11,
                 pct_5_fy)
   ) %>% 
   tab_spanner(
     label = "School/Life Balance",
     id = 6, 
-    columns = c(`SEnonacad_First Year`,
+    columns = c(13,
                 pct_6_fy)
   ) %>% 
   tab_spanner(
-    label = "Campus Events",
+    label = "Social Opportunities",
     id = 7, 
-    columns = c(`SEactivities_First Year`,
+    columns = c(15,
                 pct_7_fy)
   ) %>%     tab_spanner(
-    label = "Social Justive Events",
+    label = "Well-Being",
     id = 8, 
-    columns = c(`SEevents_First Year`,
+    columns = c(17,
                 pct_8_fy)
   ) %>%   
   tab_spanner(
     label = "Academic Success",
     id = 9, 
-    columns = c(SEacademic_Senior,
+    columns = c(4,
                 pct_1_sr)
   ) %>% 
   tab_spanner(
-    label = "Learning Support",
+    label = "Campus Activities",
     id = 10, 
-    columns = c(SElearnsup_Senior,
+    columns = c(6,
                 pct_2_sr
     )
   ) %>%  
   tab_spanner(
     label = "Diverse Interactions",
     id = 11, 
-    columns = c(SEdiverse_Senior,
+    columns = c(8,
                 pct_3_sr)
   ) %>% 
   tab_spanner(
-    label = "Social Opportunities",
+    label = "Social Justice Events",
     id = 12, 
-    columns = c(SEsocial_Senior,
+    columns = c(10,
                 pct_4_sr)
   ) %>% 
   tab_spanner(
-    label = "Well-Being",
+    label = "Learning Support",
     id = 13, 
-    columns = c(SEwellness_Senior,
+    columns = c(12,
                 pct_5_sr)
   ) %>% 
   tab_spanner(
     label = "School/Life Balance",
     id = 14, 
-    columns = c(`SEnonacad_Senior`,
+    columns = c(14,
                 pct_6_sr)
   ) %>% 
   tab_spanner(
-    label = "Campus Events",
+    label = "Social Opportunities",
     id = 15, 
-    columns = c(`SEactivities_Senior`,
+    columns = c(16,
                 pct_7_sr)
   ) %>%     tab_spanner(
-    label = "Social Justive Events",
+    label = "Well-Being",
     id = 16, 
-    columns = c(`SEevents_Senior`,
+    columns = c(18,
                 pct_8_sr)
   ) %>% 
   tab_spanner(
     label = "First Year",
-    columns = c(`SEacademic_First Year`,
+    columns = c(3,
                 pct_1_fy,
-                `SElearnsup_First Year`,
+                5,
                 pct_2_fy,
-                `SEdiverse_First Year`,
+                7,
                 pct_3_fy,
-                `SEsocial_First Year`,
+                9,
                 pct_4_fy,
-                `SEwellness_First Year`,
+                11,
                 pct_5_fy,
-                `SEnonacad_First Year`,
+                13,
                 pct_6_fy,
-                `SEactivities_First Year`,
+                15,
                 pct_7_fy,
-                `SEevents_First Year`,
+                17,
                 pct_8_fy),
     level = 2
   ) %>%  
   tab_spanner(
     label = "Senior",
-    columns = c(SEacademic_Senior,
+    columns = c(4,
                 pct_1_sr,
-                SElearnsup_Senior,
+                6,
                 pct_2_sr,
-                SEdiverse_Senior,
+                8,
                 pct_3_sr,
-                SEsocial_Senior,
+                10,
                 pct_4_sr,
-                SEwellness_Senior,
+                12,
                 pct_5_sr,
-                SEnonacad_Senior,
+                14,
                 pct_6_sr,
-                SEactivities_Senior,
+                16,
                 pct_7_sr,
-                SEevents_Senior,
+                18,
                 pct_8_sr),
     level = 2
   ) %>% 
   cols_move(
-    columns = c(`SEacademic_First Year`,
+    columns = c(3,
                 pct_1_fy,
-                `SElearnsup_First Year`,
+                5,
                 pct_2_fy,
-                `SEdiverse_First Year`,
+                7,
                 pct_3_fy,
-                `SEsocial_First Year`,
+                9,
                 pct_4_fy,
-                `SEwellness_First Year`,
+                11,
                 pct_5_fy, 
-                `SEnonacad_First Year`,
+                13,
                 pct_6_fy,
-                `SEactivities_First Year`,
+                15,
                 pct_7_fy,
-                `SEevents_First Year`,
+                17,
                 pct_8_fy),
     after = response
   ) %>% 
   cols_label(
-    response = "Response by Demographic Group",
+    response = "Response by Demographic",
     `SEacademic_First Year` = "n",
     pct_1_fy = "%",
     `SElearnsup_First Year` = "n",
@@ -1495,31 +1520,236 @@ table_se %>%
     SEevents_Senior = "n",
     pct_8_sr= "%"
   ) %>% 
-  cols_align(
+    cols_align(
     align = "right",
     columns = response
-  ) %>%   
+  ) %>% 
   cols_align(
     align = "center",
-    columns =  c(`SEacademic_First Year`, SEacademic_Senior,
-                 `SElearnsup_First Year`, SElearnsup_Senior,
-                 `SEdiverse_First Year`, SEdiverse_Senior,
-                 `SEsocial_First Year`, SEsocial_Senior,
-                 `SEwellness_First Year`, SEwellness_Senior,
-                 `SEnonacad_First Year`, SEnonacad_Senior,
-                 `SEactivities_First Year`, SEactivities_Senior,
-                 `SEevents_First Year`, SEevents_Senior) 
+    columns = 3:34 
   ) %>% 
   tab_style(
-    style = cell_text(align = 'center'), 
-    locations = cells_column_labels()) %>% 
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+     3:34 
+    )
+  ) %>% 
   cols_width(
     response ~ px(150),
-    everything() ~ px(80))
-
+    everything() ~ px(78)
+  ) %>% 
+  opt_align_table_header(align = "left")
 
 ```
 
+```{r gt-dbell-summary-table-ri}
+
+table_ri %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>% 
+  tab_header(title = "Reflective & Integrative Learning",
+             subtitle = "During the current school year, how often have you done the following?") %>% 
+  fmt_percent(starts_with("pct")) %>% 
+  tab_spanner(
+    label = "Included Diverse Perspectives in Coursework",
+    id = 1, 
+    columns = c(3,
+                pct_1_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Connected Learning to Societal Issues",
+    id = 2, 
+    columns = c(5,
+                pct_2_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Included Diverse Perspectives in Coursework",
+    id = 3, 
+    columns = c(4,
+                pct_1_sr)
+  )  %>% 
+  tab_spanner(
+    label = "Connected Learning to Societal Issues",
+    id = 4, 
+    columns = c(6,
+                pct_2_sr)
+  ) %>%  
+  tab_spanner(
+    label = "First Year",
+    columns = c(3,
+                pct_1_fy,
+                5,
+                pct_2_fy),
+    level = 2
+  ) %>%  
+  tab_spanner(
+    label = "Senior",
+    columns = c(4,
+                pct_1_sr,
+                6,
+                pct_2_sr),
+    level = 2
+  ) %>% 
+  cols_move(columns = c(3,
+                        pct_1_fy,
+                        5,
+                        pct_2_fy),
+            after = response) %>% 
+  cols_label(response = "Response by Demographic",
+             `RIsocietal_First Year` = "n",
+             pct_1_fy = "%",
+             `RIdiverse_First Year` = "n",
+             pct_2_fy = "%",
+             RIsocietal_Senior = "n",
+             pct_1_sr = "%",
+             RIdiverse_Senior = "n",
+             pct_2_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:10 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+     3:10 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+```
+
+```{r gt-dbell-summary-table-hip}
+
+table_hip %>%
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  tab_header(title = "High Impact Practices",
+             subtitle = "Which of the following have you done while in college or do you plan to do before you graduate?") %>% 
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "Hold a Leadership Role in a Student Organization",
+    id = 1,
+    columns = c(3,
+                pct_1_fy)
+  ) %>%
+  tab_spanner(
+    label = "Participate in a Learning Community",
+    id = 2,
+    columns = c(5,
+                pct_2_fy)
+  ) %>%
+  tab_spanner(
+    label = "Work with Faculty on a Research Project",
+    id = 3,
+    columns = c(7,
+                pct_3_fy)
+  ) %>% 
+  tab_spanner(
+    label = "Hold a Leadership Role in a Student Organization",
+    id = 6, 
+    columns = c(4,
+                pct_1_sr)
+  ) %>% 
+  tab_spanner(
+    label = "Participate in a Learning Community",
+    id = 7, 
+    columns = c(6,
+                pct_2_sr)
+  ) %>%  
+  tab_spanner(
+    label = "Work with Faculty on a Research Project",
+    id = 8, 
+    columns = c(8,
+                pct_3_sr)
+  ) %>% 
+  tab_spanner(
+    label = "First Year",
+    columns = c(3,
+                pct_1_fy,
+                5,
+                pct_2_fy,
+                7,
+                pct_3_fy),
+    level = 2
+  ) %>%  
+  tab_spanner(
+    label = "Senior",
+    columns = c(4,
+                pct_1_sr,
+                6,
+                pct_2_sr,
+                8,
+                pct_3_sr),
+    level = 2
+  ) %>% 
+  cols_move(
+    columns = c(3,
+                pct_1_fy,
+                5,
+                pct_2_fy,
+                7,
+                pct_3_fy),
+    after = response
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic",
+    `leader_First Year` = "n",
+    pct_1_fy = "%",
+    `learncom_First Year` = "n",
+    pct_2_fy = "%",
+    `research_First Year` = "n",
+    pct_3_fy = "%",
+    leader_Senior = "n",
+    pct_1_sr = "%",
+    learncom_Senior = "n",
+    pct_2_sr = "%",
+    research_Senior ="n",
+    pct_3_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:14 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+     3:14 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+
+```
 
 ```{r dumbbell-plot-colors}
 # all colors are from the viridis palettes (viridis, magma, plasma, inferno) and are color-blind friendly
