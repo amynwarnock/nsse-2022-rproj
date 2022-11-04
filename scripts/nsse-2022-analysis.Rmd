@@ -628,7 +628,6 @@ dbell_sum_tbl_1 <- function(data, item) {
            var == {{item}}) %>%
     group_by(IRsex19,
              IRclass,
-             var,
              response) %>%
     drop_na(IRsex19, response) %>%
     summarize(n = n()) %>%
@@ -640,7 +639,6 @@ dbell_sum_tbl_1 <- function(data, item) {
     filter(var == {{item}}) %>%
     group_by(tmds,
              IRclass,
-             var,
              response) %>%
     drop_na(tmds, response) %>%
     summarize(n = n()) %>%
@@ -652,10 +650,8 @@ dbell_sum_tbl_1 <- function(data, item) {
     filter(var == {{item}}) %>%
     group_by(firstgen,
              IRclass,
-             var,
              response) %>%
     drop_na(firstgen, response) %>%
-    
     summarize(n = n()) %>%
     pivot_wider(names_from = IRclass,
                 values_from = n) %>% 
@@ -665,7 +661,6 @@ dbell_sum_tbl_1 <- function(data, item) {
     filter(var == {{item}}) %>%
     group_by(residency,
              IRclass,
-             var,
              response) %>%
     drop_na(response) %>%
     summarize(n = n()) %>%
@@ -675,7 +670,7 @@ dbell_sum_tbl_1 <- function(data, item) {
   
   bind_rows(a, b, c, d) %>% 
     replace(is.na(.), 0) %>% 
-        group_by(demo) %>%
+    group_by(demo) %>%
     mutate(tot_fy = sum(`First Year`),
            tot_sr = sum(Senior)) %>%
     ungroup() %>%
@@ -1748,8 +1743,241 @@ table_hip %>%
   ) %>% 
   opt_align_table_header(align = "left")
 
+```
+
+```{r gt-dbell-summary-table-pgspeak}
+
+table_pgspeak %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  tab_header(title = "Perceived Gains in Verbal Communication",
+             subtitle = "How much has your experience at the University of Oregon contributed to your knowledge, skills, and personal development speaking clearly and effectively?") %>% 
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(3,
+                5)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(4,
+                6)
+  ) %>%
+  cols_move(
+    columns = 5,
+    after = 3
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic",
+    `First Year` = "n",
+    pct_fy = "%",
+    `Senior` = "n",
+    pct_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:6 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+      3:6 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
 
 ```
+
+```{r gt-dbell-summary-table-sb}
+
+table_sbvalued %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  tab_header(title = "Sense of Belonging",
+             subtitle = "To what extent do you agree or disagree with feeling valued by the University of Oregon?") %>% 
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(3,
+                5)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(4,
+                6)
+  ) %>%
+  cols_move(
+    columns = 5,
+    after = 3
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic",
+    `First Year` = "n",
+    pct_fy = "%",
+    `Senior` = "n",
+    pct_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:6 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+      3:6 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+
+```
+
+```{r gt-dbell-summary-table-reading}
+
+table_reading %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  tab_header(title = "Academic Challenge: Reading",
+             subtitle = "Of the time you spend preparing for class in a typical 7-day week, about how much is on assigned reading?") %>% 
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(3,
+                5)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(4,
+                6)
+  ) %>%
+  cols_move(
+    columns = 5,
+    after = 3
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic",
+    `First Year` = "n",
+    pct_fy = "%",
+    `Senior` = "n",
+    pct_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:6 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+      3:6 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+```
+
+```{r gt-dbell-summary-table-present}
+
+table_present %>% 
+  gt(groupname_col = "demo",
+     rowname_col = "rowname") %>%
+  tab_header(title = "Academic Challenge: In-Class Presentations",
+             subtitle = "During the current school year, about how often have you given a course presentation?") %>% 
+  fmt_percent(starts_with("pct")
+  ) %>%
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(3,
+                5)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(4,
+                6)
+  ) %>%
+  cols_move(
+    columns = 5,
+    after = 3
+  ) %>% 
+  cols_label(
+    response = "Response by Demographic",
+    `First Year` = "n",
+    pct_fy = "%",
+    `Senior` = "n",
+    pct_sr = "%"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = response
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  3:6 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = cells_column_labels(
+      3:6 
+    )
+  ) %>% 
+  cols_width(
+    response ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+```
+
 
 ```{r dumbbell-plot-colors}
 # all colors are from the viridis palettes (viridis, magma, plasma, inferno) and are color-blind friendly
@@ -2019,7 +2247,7 @@ nsse_idr_long %>%
 
 ```
 
-```{r dumbbells-pg}
+```{r dumbbells-pgpspeak}
 
 pg_g <- nsse_idr_long %>% 
   filter(IRsex19 != "Unknown") %>% 
@@ -2135,7 +2363,7 @@ bind_rows(reading_g, reading_tmds,
       demo == 'Non-First Gen' ~ '6',
       demo == 'Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>%  
-  dumbbells_single("Proportion of Time Spent Reading for Courses",
+  dumbbells_single("Academic Challenge: Reading",
                    "Percent of students who spent \"Most\" or \"Almost all\" of their weekly course preparation timeon assigned reading..." ,
                    note_all)
 
@@ -2175,7 +2403,7 @@ bind_rows(present_g, present_tmds,
       demo == 'Non-First Gen' ~ '6',
       demo == 'Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
-  dumbbells_single("In-Class Presentations", 
+  dumbbells_single("Academic Challenge: In-Class Presentations", 
                    "Percent of students who \"Often\" or \"Very often\" gave course presentations..." ,
                    note_all)
 
