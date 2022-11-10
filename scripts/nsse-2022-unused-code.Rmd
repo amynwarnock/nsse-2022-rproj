@@ -1,0 +1,163 @@
+---
+title: "NSSE 2022 - Unused and Rough Code"
+author: "Amy N. Warnock"
+date: "2022-11-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r dumbbells-master-tables}
+
+# 3-way contingency tables calculating counts of responses to specified items x demographic group x class. Copied and pasted output into Excel for further formatting and organization.
+
+
+# dd <- ftable(nsse_chr_wide$IRsex19, nsse_chr_wide$IRclass, nsse_chr_wide$DDrace)
+# ftable(nsse_idr_wide_chr$tmds, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+# ftable(nsse_idr_wide_chr$firstgen, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+# ftable(nsse_idr_wide_chr$residency, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace)
+# 
+# 
+# 
+# 
+# ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDeconomic)
+# ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDreligion)
+# ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDpolitical)
+
+```
+
+```{r exploring}
+# Doing a little exploring
+
+# self-reported gender to examine if cell sizes are viable
+
+gender_selfrep_DDrace <- data_orig_full %>% 
+  group_by(IRclass, genderid, DDrace) %>% 
+  summarize(n = n()) 
+
+# prelim exploration of other variables
+
+data_factorized %>% 
+  group_by(IRrace) %>% 
+  summarize(n = n()) 
+
+data_factorized %>% 
+  group_by(re_all19) %>% 
+  summarize(n = n()) 
+
+data_factorized %>% 
+  group_by(IRsex19) %>% 
+  summarize(n = n())
+
+data_factorized %>% 
+  ggplot(aes(x = DDrace)) +
+  geom_bar() + 
+  facet_wrap("IRrace") 
+
+
+```
+
+```{r tables}
+data_factorized %>% 
+  select(studentid,
+         IRrace,
+         IRclass,
+         IRsex19,
+         firstgen,
+         DDrace, 
+         DDeconomic,
+         DDreligion,
+         DDpolitical) %>% 
+  filter(IRclass ==
+    group_by(IRsex19,
+           IRclass,
+           DDrace) %>% 
+  summarize(n = n())
+
+con <- xtabs(~ DDrace + IRsex19 + IRclass, data = nsse_idr_wide_chr) %>% 
+  as_tibble()
+
+ftable(con)
+
+data_factorized %>% 
+  group_by(IRclass) %>% 
+  summarize(n = n())
+
+ddracexgender <- ftable(nsse_idr_wide_chr$IRsex19, nsse_idr_wide_chr$IRclass, nsse_idr_wide_chr$DDrace) %>%
+  as_tibble() %>% 
+  mutate(source = "ddrace")
+```
+
+
+### Likert Graphs
+
+```{r likert-bars-a}
+
+## AMY: (1) join NSSE data with wide dataset, (2) rename CWP and CIV vars
+
+data <- nsse_fct_wide %>% 
+  select(IRsex19, IRclass, DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+  filter(IRsex19 != "Unknown" & IRclass == "Freshman (1st year)") %>% 
+  rename(
+    "Race/ethnicity" = DDrace,
+    "SES" = DDeconomic,
+    "Religious beliefs" = DDreligion,
+    "Political ideology" = DDpolitical,
+    "Students" = QIstudent,
+    "Advisors" = QIadvisor,
+    "Faculty" = QIfaculty,
+    "Student services" = QIstaff,
+    "Admin" = QIadmin,
+    "Support for succeeding academically" = SEacademic,
+    "Using learning support services" = SElearnsup,
+    "Encouraging diverse interactions" = SEdiverse,
+    "Opportunities for social inolvement" = SEsocial,
+    "Support for well-being" = SEwellness,
+    "Help managing work/school/life balance" = SEnonacad,
+    "Attending campus activities/events" = SEactivities,
+    "Attending social justice events" = SEevents,
+    "Given a course presentation" = present,
+    "Connected learning to societal problems or issues" = RIsocietal,
+    "Included diverse perspectives in course discussions or assignments" = RIdiverse,
+    "Hold a leadership role in a student organization/group" = leader,
+    "Work with faculty on a research project" = research,                                                                                                                                                                                                                    
+    "Participate in a learning community" = learncom) %>% as.data.frame()  
+
+
+
+str(data)
+summary(data)
+
+likdata <- likert(data[,3:6], grouping = data$IRsex19)
+
+
+plot(likdata, type = "bar") + 
+  labs(title = "Conversations with those differing in...") + 
+  theme (legend.title = element_blank())
+```
+
+```{r likert-bars-b}
+
+# data2 <- data_factorized %>% 
+#   select(DDrace, DDeconomic, DDreligion, DDpolitical) %>% 
+#   as.data.frame()
+# 
+# ddgendergroups <- data$IRsex19
+# plot_likert(data, groups = ddgendergroups)
+
+```
+
+```{r }
+data_chr %>% 
+  group_by(IRsex19, IRclass, DDrace) %>% 
+  filter(IRsex19 != "Unknown") %>% 
+  summarize(n = n()) %>% 
+  pivot_wider(names_from = DDrace, values_from = n)
+
+) 
+
+```
+
