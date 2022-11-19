@@ -123,8 +123,8 @@ data <- nsse_fct_wide %>%
     "Connected learning to societal problems or issues" = RIsocietal,
     "Included diverse perspectives in course discussions or assignments" = RIdiverse,
     "Hold a leadership role in a student organization/group" = leader,
-    "Work with faculty on a research project" = research,                                                                                                                                                                                                                    
-    "Participate in a learning community" = learncom) %>% as.data.frame()  
+    "Work with faculty on a research project" = research,                                           "Participate in a learning community" = learncom) %>% as.data.frame()
+
 
 
 
