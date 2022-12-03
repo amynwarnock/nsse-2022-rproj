@@ -1,7 +1,7 @@
 ---
 title: "NSSE 2022 Analysis [In Progress]"
 author: "Amy N. Warnock"
-date: "Last updated November 9, 2022"   
+date: "Last updated November 29, 2022"   
 output:
   html_document:
     toc: true
@@ -17,8 +17,8 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE,
                       message = FALSE,
-                      fig.width = 10,
-                      fig.height = 8)
+                      fig.width = 8,
+                      fig.height = 6)
 
 #install.packages("here")
 #install.packages("tidyverse")
@@ -43,6 +43,7 @@ knitr::opts_chunk$set(echo = TRUE,
 #install.packages("stringr")
 #install.packages("gt")
 #install.packages("gtExtras")
+#install.packages("ggh4x")
 
 library(here)
 library(tidyverse)
@@ -58,8 +59,9 @@ library(colorblindr)
 library(stringr)
 library(gt)
 library(gtExtras)
+library(ggh4x)
+library(psych)
 
-#library(psych)
 #library(sjPlot)
 ```
 
@@ -73,10 +75,16 @@ nsse_orig_full <- import(
   setclass = "tbl_df")
 
 # load demographics from IDR/Cognos (exported 10/14/22 AW)
+
 idr_demo_orig <- import(
   here("data", "2022-10-14c-Cognos_StudentDemographics_ALL_wPIDM.xlsx"), 
   setclass = "tbl_df")
 
+# load Fall 2022 ENR census file (created by JP at IR, rec'd 11/21/2022)
+
+enr_orig_full <- import(
+  here("data", "enr_detail_fall_2022.xlsx"),
+       setclass = "tbl_df")
 ```
 
 ### Wrangling
@@ -143,6 +151,10 @@ nsse_orig_narrowed <- nsse_orig_full %>%
              tmcocurr == '3' | tmcocurr == '4' ~ 'Moderate', 
              tmcocurr == '5' | tmcocurr == '6' | 
                tmcocurr == '7' | tmcocurr == '8' ~ 'High'),
+         tmworkhrs_binned = cut(tmworkhrs, 
+                                breaks = c(-Inf, 1, 11, 21, Inf),
+                                labels = c("None", "1-10", "11-20", "More than 20"),
+                                right = FALSE),
          tmds = 
            case_when(
              IRrace == '1' | IRrace == '2' | 
@@ -165,7 +177,7 @@ nsse_chr_wide <- nsse_orig_narrowed %>%
   characterize()
 ```
 
-#### Inspecting NSSE dataframes
+#### Inspect NSSE dataframes
 
 ```{r inspect-nsse}
 # orig nsse data that was narrowed to variables of interest
@@ -184,18 +196,73 @@ str(nsse_fct_wide)
 
 # wide nsse dataset that has been characterized
 head(nsse_chr_wide)
+
+# counts and distributions of tmworkhrs and tmworkhrs_binned
+nsse_chr_wide %>% 
+  group_by(tmworkhrs_binned) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x = tmworkhrs_binned, y = n))  + 
+  geom_col()
+
+nsse_chr_wide %>% 
+  group_by(tmworkhrs_binned) %>% 
+  summarize(n = n()) %>% 
+  ggplot(aes(x = reorder(tmworkhrs_binned, n), y = n))  + 
+  geom_col()
+
+nsse_chr_wide %>% # Majority of FY students do not work. Majority of SR students work 11-20 hrs/wk.
+  ggplot(aes(x = tmworkhrs)) +
+  geom_bar() +
+  facet_wrap(~IRclass)
+
+nsse_chr_wide %>% 
+  ggplot(aes(x = tmworkhrs_binned)) +
+  geom_bar() +
+  facet_wrap(~IRclass)
+
+# nsse_fct_wide %>% 
+#   filter(!is.na(tmworkhrs_binned)) %>% 
+#   ggplot(aes(x = tmworkhrs_binned)) +
+#   geom_bar(aes(y = (..count..)/sum(..count..))) +
+#   facet_wrap(~IRclass)
+
+nsse_chr_wide %>% 
+  group_by(tmworkhrs_binned, IRclass) %>%
+  filter(!is.na(tmworkhrs_binned)) %>% 
+  summarize(n = n()) %>% 
+  pivot_wider(names_from = tmworkhrs_binned,
+              values_from = n) 
+
+
+table1 <- xtabs(~ IRclass + tmworkhrs_binned, data = nsse_chr_wide)
+
+prop.table(table1, 1)
+
+prop.table(nsse_chr_wide$IRclass, nsse_chr_wide$tmworkhrs_binned)
 ```
 
-#### Checking that tmds and tmcocurr variables were recoded correctly
+#### Check that tmds, tmworkhours, tmcocurr variables were recoded correctly
 
 ```{r check-recoding}
 
-# check the recoded tmcocurr and race/eth variables
+# check the recoded tmcocurr, tmworkhrs, and race/eth variables
 ftable(nsse_chr_wide$IRrace, nsse_chr_wide$tmds, exclude = "")
 ftable(nsse_chr_wide$tmcocurr, nsse_chr_wide$tmcocurr_binned, exclude = "")
+ftable(nsse_chr_wide$tmworkhrs, nsse_chr_wide$tmworkhrs_binned, exclude = "")
+
+nsse_chr_wide %>% 
+  filter(is.na(tmworkhrs)) %>% 
+  summarize(n = n())
+
+nsse_orig_narrowed %>% 
+  group_by(tmworkhrs_binned) %>% 
+  summarize(n = n(),
+            min = min(tmworkhrs),
+            max = max(tmworkhrs))
+
 ```
 
-#### Pivoting longer for dumbbell graphs and summary tables
+#### Pivot longer for dumbbell graphs and summary tables
 
 ```{r wrangle-nsse-pivot-longer}
 # pivot longer so that that item names and responses to each item are stored in 2 columns (i.e., one row per student per item response)
@@ -253,19 +320,19 @@ nsse_fct_long <- nsse_fct_wide %>%
 
 ```{r wrangle-idr-demographics}
 
-# Cognos demographics dataset: select vars that will be used in these analyses, recode residency status, and create variable for first-generation status
+# Cognos demographics dataset: select vars that will be used in these analyses, recode residency status, and create variable for first gen status (i.e., parent education level)
 
 idr_demo <- idr_demo_orig %>% 
   mutate(
     residency = ifelse(RESIDENCY_DESC == "Non-Resident", 
                        "Non-Resident", 
-                       "Resident"),
+                       "OR Resident"),
     EDUCATION_LEVEL_DESC2 = na_if(EDUCATION_LEVEL_DESC, 
                                   "Unknown"),
     firstgen = ifelse((EDUCATION_LEVEL_DESC2 == "Bachelors Degree" |  
                          EDUCATION_LEVEL_DESC2 == "Masters Degree" |
                          EDUCATION_LEVEL_DESC2 == "Doctoral Degree"), 
-                      "Non-First Gen", 
+                      "Continuing Gen", 
                       "First Gen")) %>% 
   select(ID,
          PERSON_UID,
@@ -278,6 +345,71 @@ idr_demo <- idr_demo_orig %>%
 #   group_by(ID) %>% 
 #   summarize(n = n())
 
+```
+
+#### Wrangle ENR file - retention and graduation vars
+
+```{r}
+
+enr_ret_grad <- enr_orig_full %>% 
+  select(PIDM,
+         ID,
+         ret_fall_term_yr2,
+         ret_fall_term_yr3,
+         ret_fall_term_yr4,
+         starts_with("grad")) %>% 
+
+  mutate(
+    ttd_4 = ifelse(rowSums(across((ends_with("yr1") |
+                                     ends_with("yr2") |
+                                     ends_with("yr3") |
+                                     ends_with("yr4")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_5 = ifelse(rowSums(across((ends_with("yr5")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_6 = ifelse(rowSums(across((ends_with("yr6")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_7 = ifelse(rowSums(across((ends_with("yr7") |
+                                     ends_with("yr8") |
+                                     ends_with("yr9") |
+                                     ends_with("yr10")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_count = rowSums(across(ttd_4:ttd_7)),
+    ttd = case_when(
+      ttd_4 == 1 ~ '4',
+      ttd_5 == 1 ~ '5',
+      ttd_6 == 1 ~ '6',
+      ttd_7 == 1 ~ '7+')
+    ) %>% 
+  select(-starts_with("grad"))
+    
+nsse_enr_testing <- left_join(nsse_fct_wide, enr_ret_grad,
+                              bc
+
+xtabs(~ IRclass + ret_fall_term_yr2, data = nsse_enr_testing)
+
+fy <- nsse_enr_testing %>% 
+  filter(IRclass == "First Year")
+  
+  
+fy_tmwork <- xtabs(~ tmworkhrs_binned + ret_fall_term_yr2, data = fy)
+
+prop.table(fy_tmwork, 1)
+
+
+fy_tmcocurr <- xtabs(~ tmcocurr_binned + ret_fall_term_yr2, data = fy)
+
+prop.table(fy_tmcocurr, 1)
+
+nsse_fct_wide$tmworkhrs_binned
 ```
 
 #### Join NSSE and IDR Demos
@@ -607,74 +739,61 @@ dumbbellprep_single <- function(data, item, demographic) {
 
 ```{r dumbbell-wrangling-plot-composites}
 
-dumbbellprepplot_comp <- function(data, comp_title, comp_subtitle, comp_caption) {
-
-a <- data %>% 
-  filter(IRsex19 != "Unknown") %>% 
-  group_by(IRsex19,
-           IRclass) %>% 
-  summarize(mean_grp = mean(stu_avg, na.rm = TRUE)) %>% 
-      rename(demo = IRsex19)
-
-b <- data %>% 
- group_by(tmds,
-           IRclass) %>% 
-  summarize(mean_grp = mean(stu_avg, na.rm = TRUE)) %>% 
-      rename(demo = tmds) %>% 
-  drop_na(demo)
-
-c <- data %>% 
- group_by(firstgen,
-           IRclass) %>% 
-  summarize(mean_grp = mean(stu_avg, na.rm = TRUE)) %>% 
-      rename(demo = firstgen) %>% 
-  drop_na(demo)
-
-d <- data %>% 
- group_by(residency,
-           IRclass) %>% 
-  summarize(mean_grp = mean(stu_avg, na.rm = TRUE)) %>% 
-      rename(demo = residency)
-
-bind_rows(a, b,
-          c, d) %>% 
-  mutate(pair = case_when(
-    demo == 'Female' ~ '1',
-    demo == 'Male' ~ '2',
-    demo == 'Non-TMDS' ~ '3',
-    demo == 'TMDS' ~ '4',
-    demo == 'First-Gen' ~ '5',
-    demo == 'Non-First Gen' ~ '6',
-    demo == 'Resident' ~ '7',
-    demo == 'Non-Resident' ~ '8')) %>%
-  ggplot(aes(x = mean_grp,
-             y = reorder(demo, mean_grp))) +
-  geom_line(aes(group = pair),
-            color = "gray60") +
-  geom_point(aes(color = IRclass),
-             size = 5,
-             alpha = .95,
-             stroke = 0) +
-  scale_color_manual(values = c_class) + 
-  coord_cartesian(xlim = c(0, 4.3)) +
-  scale_x_continuous(expand = c(0, 0),
-                     breaks = c(0, 1, 2, 3, 4)) +  
-  theme_minimal(15) +
-  theme(plot.title.position = "plot",
-        panel.grid.major.y = element_blank(),
-        panel.grid.minor.y = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        legend.position = "bottom",
-        legend.title = element_blank()) +
-  labs(title = str_wrap({{comp_title}}),
-       subtitle = str_wrap({{comp_subtitle}}),
-       y = "",
-       x = "",
-       caption = str_wrap({{comp_caption}}))
-}
+dumbbellprep_comp <- function(data) {
+  
+  a <- data %>% 
+    filter(IRsex19 != "Unknown",
+           !is.na(stu_avg)) %>% 
+    group_by(IRsex19,
+             IRclass) %>% 
+    summarize(n = n(),
+              mean = mean(stu_avg),
+              sd = sd(stu_avg)) %>% 
+    rename(demo = IRsex19) 
+  
+  b <- data %>% 
+    filter(!is.na(stu_avg)) %>% 
+    group_by(tmds,
+             IRclass) %>% 
+    summarize(n = n(),
+              mean = mean(stu_avg),
+              sd = sd(stu_avg)) %>% 
+    rename(demo = tmds) %>% 
+    drop_na(demo)
+  
+  c <- data %>% 
+    filter(!is.na(stu_avg)) %>% 
+    group_by(firstgen,
+             IRclass) %>% 
+    summarize(n = n(),
+              mean = mean(stu_avg),
+              sd = sd(stu_avg)) %>% 
+    rename(demo = firstgen) %>% 
+    drop_na(demo)
+  
+  d <- data %>% 
+    filter(!is.na(stu_avg)) %>% 
+    group_by(residency,
+             IRclass) %>% 
+    summarize(n = n(),
+              mean = mean(stu_avg),
+              sd = sd(stu_avg)) %>% 
+    rename(demo = residency) 
+  
+  bind_rows(a, b, c, d) %>% 
+    ungroup() %>% 
+    mutate(pair = case_when(
+      demo == 'Female' ~ '1',
+      demo == 'Male' ~ '2',
+      demo == 'Non-TMDS' ~ '3',
+      demo == 'TMDS' ~ '4',
+      demo == 'First-Gen' ~ '5',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
+      demo == 'Non-Resident' ~ '8'))
+}  
 
 ```
-
 
 ```{r dumbbell-plot-functions}
 
@@ -695,6 +814,7 @@ dumbbells_mult <- function(data, demographic, c, ttl, sbttl, cap) {
     scale_x_continuous(expand = c(0, 0),
                        breaks = c(.1, .3, .5, .7),
                        labels = scales::percent) +
+    scale_y_discrete(labels = scales::wrap_format(25)) +
     scale_color_manual(values = {{c}}) + 
     theme_minimal(15) +
     theme(plot.title.position = "plot",
@@ -707,7 +827,9 @@ dumbbells_mult <- function(data, demographic, c, ttl, sbttl, cap) {
          subtitle = str_wrap({{sbttl}}),
          y = "",
          x = "",
-         caption = str_wrap({{cap}}))
+         caption = str_wrap({{cap}})) +
+    force_panelsizes(rows = unit(3, "in"),
+                     cols = unit(3, "in"))
 }
 
 
@@ -742,6 +864,37 @@ dumbbells_single <- function(data, ttl, sbttl, cap) {
          caption = str_wrap({{cap}}))
 }
 
+# dumbbell v3 (mean score, all student subgroups on on y-axis, color by FY/SR)
+
+dumbbellplot_comp <- function(data, comp_title, comp_subtitle, comp_caption) {
+  
+  data %>% 
+  ggplot(aes(x = mean,
+             y = reorder(demo, mean))) +
+  geom_line(aes(group = pair),
+            color = "gray60") +
+  geom_point(aes(color = IRclass),
+             size = 5,
+             alpha = .95,
+             stroke = 0) +
+  scale_color_manual(values = c_class) + 
+  coord_cartesian(xlim = c(0, 4.3)) +
+  scale_x_continuous(expand = c(0, 0),
+                     breaks = c(0, 1, 2, 3, 4)) +  
+  theme_minimal(15) +
+  theme(plot.title.position = "plot",
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank()) +
+  labs(title = str_wrap({{comp_title}}),
+       subtitle = str_wrap({{comp_subtitle}}),
+       y = "",
+       x = "",
+       caption = str_wrap({{comp_caption}}))
+}
+
 ```
 
 ```{r dumbbell-plot-colors}
@@ -761,15 +914,24 @@ c_class <- c("#8c2369", "#35b779") #magenta, medium green
 
 ```{r dumbbell-plot-captions}
 
-note_gender <- "Note. Gender categories limited to male and female due to University of Oregon recordkeeping and to protect student privacy and confidentiality."
+note_gender <- ""
+  
+  #"Note. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality."
 
-note_tmds <- "Note. TMDS = Traditionally Marginalized Domestic Students. Race and ethnicity aggregated to protect studenty privacy and confidentiality."
+note_tmds <- ""
+  
+  #"Note. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality."
 
-#note_firsgen <- NOT NECESSARY
+note_firstgen <- ""
+  
+  
+  #"Note. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who completed a four-year college/university degree are considered Continuing Generation."
 
 #note_residency <- NOT NECESSARY
 
-note_all <- "Note. TMDS = Traditionally Marginalized Domestic Students. Race and ethnicity aggregated to protect studenty privacy and confidentiality. Gender categories limited to male and female due to University of Oregon recordkeeping and to protect student privacy and confidentiality."
+note_all <- ""
+  
+  #"Note. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who completed a four-year college/university degree are considered Continuing Generation."
   
 ```
 
@@ -849,7 +1011,6 @@ dbell_sum_tbl_gen <- function(data, items) {
 ```
 
 ```{r dbell-summary-table-1item-function}
-
 
 dbell_sum_tbl_1 <- function(data, item) {
   
@@ -1057,9 +1218,10 @@ nsse_idr_long %>%
   dumbbellprep_dd(IRsex19) %>% 
   dumbbells_mult(IRsex19,
              c_gender,
-             "Discussions with Diverse Others: Gender",
+             "Discussions with Diverse Others: Binary Gender",
              "Percent of students who \"Often\" or \"Very Often\" had conversations with those differing in...",
              note_gender) 
+
 
 # DD by race/eth and class
 
@@ -1079,9 +1241,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>% 
   dumbbells_mult(firstgen,
             c_firstgen,
-            "Discussions with Diverse Others: First-Generation Status",
+            "Discussions with Diverse Others: Parent Education Level",
             "Percent of students who \"Often\" or \"Very Often\" had conversations with those differing in...",
-            "")
+            note_firstgen)
 
 # DD by res status and class
 
@@ -1105,8 +1267,8 @@ nsse_idr_long %>%
   dumbbellprep_qi(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                  c_gender,
-                 "Quality of Interactions: Gender",
-                 "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                 "Quality of Interactions: Binary Gender",
+                 "Percent of students who rated their interactions with the following groups as as \"Nearly Excellent\" or \"Excellent\"",
                  note_gender)
 
 
@@ -1118,7 +1280,7 @@ nsse_idr_long %>%
   dumbbells_mult(tmds,
                   c_tmds,
                   "Quality of Interactions: Race/Ethnicity",
-                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                  "Percent of students who rated their interactions with the following groups as \"Nearly Excellent\" or \"Excellent\"",
                   note_tmds)
 
 # QI by first-gen and class
@@ -1128,9 +1290,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>% 
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Quality of Interactions: First-Generation Status",
-                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
-                  "")
+                  "Quality of Interactions: Parent Education Level",
+                  "Percent of students who rated their interactions with the following groups as as \"Nearly\" Excellent or \"Excellent\"",
+                  note_firstgen)
 
 # QI by residency and class
 
@@ -1139,7 +1301,7 @@ nsse_idr_long %>%
   dumbbells_mult(residency,
                   c_residency,
                   "Quality of Interactions: Residency Status",
-                  "Percent of students who rated their interactions with the following groups as a 6 or 7 (on a scale from 1 = \"Poor\" to 7 = \"Excellent\")",
+                  "Percent of students who rated their interactions with the following groups as as \"Nearly Excellent\" or \"Excellent\"",
                   "")
   
 ```
@@ -1154,7 +1316,7 @@ nsse_idr_long %>%
   dumbbellprep_se(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                   "Supportive Environment: Gender",
+                   "Supportive Environment: Binary Gender",
                    "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
                    note_gender)
 
@@ -1177,9 +1339,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                   "Supportive Environment: First-Generation Status",
+                   "Supportive Environment: Parent Education Level",
                    "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized...",
-                   "")
+                   note_firstgen)
 
 
 # SE by residency and class
@@ -1206,7 +1368,7 @@ nsse_idr_long %>%
   dumbbellprep_ri(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "Reflective & Integrative Learning: Gender",
+                  "Reflective & Integrative Learning: Binary Gender",
                   "Percent of students who \"Often\" or \"Very Often\"...",
                   note_gender)
 
@@ -1228,9 +1390,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Reflective & Integrative Learning: First-Generation Status",
+                  "Reflective & Integrative Learning: Parent Education Level",
                   "Percent of students who \"Often\" or \"Very Often\"...",
-                   "")
+                   note_firstgen)
 
 
 # RI by residency and class
@@ -1256,7 +1418,7 @@ nsse_idr_long %>%
   dumbbellprep_hip(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "High-Impact Practices: Gender",
+                  "High-Impact Practices: Binary Gender",
                   "Percent of students who have or are planning to...",
                   note_gender)
 
@@ -1278,9 +1440,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "High-Impact Practices: First-Generation Status",
+                  "High-Impact Practices: Parent Education Level",
                   "Percent of students who have or are planning to...",
-                   "")
+                   note_firstgen)
 
 
 # HIP by residency and class
@@ -1327,17 +1489,13 @@ bind_rows(pg_g, pg_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
   dumbbells_single(
     "Perceived Gains in Verbal Communication",
     "Percent of students who felt \"Quite a bit\" or \"Very much\" that their experience at UO contributed to their skills and development with speaking clearly and effectively" ,
-    "Note. insert all notes here")
-
-
-
-
+    note_all)
 
 ```
 
@@ -1375,8 +1533,8 @@ bind_rows(sb_g, sb_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
   dumbbells_single("Sense of Belonging",
                    "Percent of students who \"Agreed\" or \"Strongly agreed\" that they felt valued by UO" ,
@@ -1418,8 +1576,8 @@ bind_rows(reading_g, reading_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>%  
   dumbbells_single("Academic Challenge: Reading",
                    "Percent of students who spent \"Most\" or \"Almost all\" of their weekly course preparation timeon assigned reading..." ,
@@ -1460,8 +1618,8 @@ bind_rows(present_g, present_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
   dumbbells_single("Academic Challenge: In-Class Presentations", 
                    "Percent of students who \"Often\" or \"Very often\" gave course presentations..." ,
@@ -1480,7 +1638,7 @@ nsse_idr_long %>%
   dumbbellprep_cp(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "Career Plans: Gender",
+                  "Career Plans: Binary Gender",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
                   note_gender)
 
@@ -1502,9 +1660,9 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Career Plans: First-Generation Status",
+                  "Career Plans: Parent Education Level",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\"...",
-                   "")
+                   note_firstgen)
 
 
 # CP by residency and class
@@ -1521,7 +1679,6 @@ nsse_idr_long %>%
 
 ```{r dumbbells-cwp-plans-mean}
 
-
 cwp_plans_mean <- nsse_idr_long %>% 
   filter(var == "CWPidea" |
            var == "CWPclarify" |
@@ -1533,15 +1690,25 @@ cwp_plans_mean <- nsse_idr_long %>%
                               response == 'Some' ~ '2', 
                               response == 'Quite a bit' ~ '3', 
                               response == 'Very much' ~ '4')) %>%  
-  group_by(studentid) %>% 
-  mutate(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
+  group_by(studentid,
+           IRclass,
+           tmds,
+           IRsex19,
+           firstgen,
+           residency) %>% 
+  summarize(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
   ungroup()
 
+cwp_plans_mean %>% 
+  dumbbellprep_comp() %>% 
+  dumbbellplot_comp("Career Plans: Average Score", 
+                    "",
+                    "")
 
-dumbbellprepplot_comp(cwp_plans_mean, "Career Plans: Average Score", "", "note tbd")
+
+#                      "Note. Average score calculated from 5 questions measuring career plans. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who  completed a four-year college/university degree are considered Continuing Generation.")
 
 ```
-
 
 #### Influences on Career Plans
 
@@ -1554,7 +1721,7 @@ nsse_idr_long %>%
   dumbbellprep_cpi(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "Career Plan Influences: Gender",
+                  "Career Plan Influences: Binary Gender",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
                   note_gender)
 
@@ -1576,7 +1743,7 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Career Plan Influences: First-Generation Status",
+                  "Career Plan Influences: Parent Education Level",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" their career plans were influenced by...",
                  "")
 
@@ -1594,7 +1761,6 @@ nsse_idr_long %>%
 
 ```
 
-
 ```{r dumbbells-cwp-influences-mean}
 
 cwp_inf_mean <- nsse_idr_long %>% 
@@ -1608,12 +1774,22 @@ cwp_inf_mean <- nsse_idr_long %>%
                               response == 'Some' ~ '2', 
                               response == 'Quite a bit' ~ '3', 
                               response == 'Very much' ~ '4')) %>%  
-  group_by(studentid) %>% 
-  mutate(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
+  group_by(studentid,
+           IRclass,
+           tmds,
+           IRsex19,
+           firstgen,
+           residency) %>% 
+  summarize(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
   ungroup()
 
+cwp_inf_mean %>% 
+  dumbbellprep_comp() %>% 
+  dumbbellplot_comp("Career Influences: Average Score", 
+                    "",
+                    "")
 
-dumbbellprepplot_comp(cwp_inf_mean, "Career Influences: Average Score", "", "note tbd")
+#"Note. Average score calculated from 5 questions measuring career plan influences. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who  completed a four-year college/university degree are considered Continuing Generation.")
 
 ```
 
@@ -1621,7 +1797,7 @@ dumbbellprepplot_comp(cwp_inf_mean, "Career Influences: Average Score", "", "not
 
 ```{r dumbbells-cwp-research}
 
-# CWP module: frequency of career preparation activities *during courese*
+# CWP module: frequency of career preparation activities *during courses*
 
 cresearch_g <- nsse_idr_long %>% 
   filter(IRsex19 != "Unknown") %>% 
@@ -1650,8 +1826,8 @@ bind_rows(cresearch_g, cresearch_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
   dumbbells_single("Career Research", 
                    "Percent of students who \"Often\" or \"Very often\" researched a career interest, potential employer, or the job market as part of a course at UO..." ,
@@ -1670,7 +1846,7 @@ nsse_idr_long %>%
   dumbbellprep_cive(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "Civic Engagement Encouragement: Gender",
+                  "Civic Engagement Encouragement: Binary Gender",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
                   note_gender)
 
@@ -1692,7 +1868,7 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Civic Engagement Encouragement: First-Generation Status",
+                  "Civic Engagement Encouragement: Parent Education Level",
                   "Percent of students who felt \"Quite a Bit\" or \"Very Much\" enouraged to address important civic issues in...",
                  "")
 
@@ -1718,12 +1894,22 @@ civ_encouragement_mean <- nsse_idr_long %>%
                               response == 'Some' ~ '2', 
                               response == 'Quite a bit' ~ '3', 
                               response == 'Very much' ~ '4')) %>%  
-  group_by(studentid) %>% 
-  mutate(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
+  group_by(studentid,
+           IRclass,
+           tmds,
+           IRsex19,
+           firstgen,
+           residency) %>% 
+  summarize(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
   ungroup()
 
+civ_encouragement_mean %>% 
+  dumbbellprep_comp() %>% 
+  dumbbellplot_comp("Civic Engagement Encouragement: Average Score", 
+                    "",
+                    "")
 
-dumbbellprepplot_comp(civ_encouragement_mean, "Civic Engagement Encouragement: Average Score", "", "note tbd")
+                      #"Note. Average score calculated from 2 questions measuring civic engagement encouragement. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who  completed a four-year college/university degree are considered Continuing Generation.")
 
 ```
 
@@ -1738,7 +1924,7 @@ nsse_idr_long %>%
   dumbbellprep_civl(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                   c_gender,
-                  "Involvement with Campus and Local Issues: Gender",
+                  "Involvement with Campus and Local Issues: Binary Gender",
                   "Percent of students who \"Often\" or \"Very Often\"...",
                   note_gender)
 
@@ -1760,7 +1946,7 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                   c_firstgen,
-                  "Involvement with Campus and Local Issues: First-Generation Status",
+                  "Involvement with Campus and Local Issues: Parent Education Level",
                   "Percent of students who \"Often\" or \"Very Often\"...",
                  "")
 
@@ -1787,12 +1973,23 @@ civ_loc_mean <- nsse_idr_long %>%
                               response == 'Sometimes' ~ '2', 
                               response == 'Often' ~ '3', 
                               response == 'Very often' ~ '4')) %>%  
-  group_by(studentid) %>% 
-  mutate(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
+  group_by(studentid,
+           IRclass,
+           tmds,
+           IRsex19,
+           firstgen,
+           residency) %>% 
+  summarize(stu_avg = mean(as.numeric(resp_num))) %>% # composite not computed if student didn't respond to all items
   ungroup()
 
+civ_loc_mean %>% 
+  dumbbellprep_comp() %>% 
+  dumbbellplot_comp("Involvement with Campus and Local Issues: Average Score", 
+                    "",
+                    "")
 
-dumbbellprepplot_comp(civ_loc_mean, "Involvement with Campus and Local Issues: Average Score", "", "note tbd")
+
+#                      "Note. Average score calculated from 3 questions measuring involvement with campus and local issues. TMDS = Traditionally Marginalized Domestic Students. TMDS/Non-TMDS calculated based on race/ethnicity data collected during admissions. TMDS includes students who reported their race/ethnicity as American Indian or Alaska Native, Asian, Black or African American, Hispanic or Latino, or Native Hawaiian or Other Pacific Islander. Non-TMDS are students who reported their race/ethnicity as White. Race and ethnicity were aggregated in this way to protect student privacy and confidentiality. Binary gender is reported due to how this information is collected during admissions and to protect student privacy and confidentiality. First Gen = First Generation. Continuing Gen = Continuing Generation. Students whose parents have not completed a four-year college/university degree are considered First Generation. Students with at least one parent who  completed a four-year college/university degree are considered Continuing Generation.")
 
 ```
 
@@ -1806,7 +2003,7 @@ nsse_idr_long %>%
   dumbbellprep_civcr(IRsex19) %>% 
   dumbbells_mult(IRsex19,
                  c_gender,
-                 "Ability with Conflict Resolution: Gender",
+                 "Ability with Conflict Resolution: Binary Gender",
                  "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
                  note_gender)
 
@@ -1828,7 +2025,7 @@ nsse_idr_long %>%
   drop_na(firstgen) %>%
   dumbbells_mult(firstgen,
                  c_firstgen,
-                 "Ability with Conflict Resolution: First-Generation Status",
+                 "Ability with Conflict Resolution: Parent Education Level",
                  "Percent of students who rated their ability with the following as a 4 or 5 (on a scale from 1 = \"Poor\" to 5 = \"Excellent\")",
                  "")
 
@@ -1878,8 +2075,8 @@ bind_rows(civie_g, civie_tmds,
       demo == 'Non-TMDS' ~ '3',
       demo == 'TMDS' ~ '4',
       demo == 'First-Gen' ~ '5',
-      demo == 'Non-First Gen' ~ '6',
-      demo == 'Resident' ~ '7',
+      demo == 'Continuing Gen' ~ '6',
+      demo == 'OR Resident' ~ '7',
       demo == 'Non-Resident' ~ '8')) %>% 
   dumbbells_single("Civic Engagement: Institutional Emphasis", 
                    "Percent of students who felt \"Quite a Bit\" or \"Very Much\" that UO emphasized being an informed and active citizen..." ,
@@ -3200,6 +3397,67 @@ table_cwp_plans %>%
 
 ```
 
+```{r gt-dbell-summary-table-cwp-plans-mean}
+
+cwp_plans_mean %>% 
+  dumbbellprep_comp() %>% 
+  select(-pair) %>% 
+  pivot_wider(names_from = IRclass,
+              values_from = c(n, mean, sd)) %>% 
+  gt() %>%
+  tab_header(title = "Career Plans: Average Score") %>%
+  fmt_number(4:7,
+             decimals = 2) %>% 
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(2,
+                4,
+                6)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(3,
+                5,
+                7)
+  ) %>%
+  cols_label(
+    demo = "Demographic",
+    `n_First Year` = "n",
+    `mean_First Year` = "M",
+    `sd_First Year` = "SD",
+    n_Senior = "n",
+    mean_Senior = "M",
+    sd_Senior = "SD"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = demo
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  2:7 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center", style = "italic"),
+    locations = cells_column_labels(
+      2:7
+    )
+  ) %>% 
+  cols_width(
+    demo ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+
+```
+
 #### Influences on Career Plans
 
 ```{r gt-dbell-summary-table-cwp-influences}
@@ -3373,6 +3631,67 @@ table_cwp_inf %>%
 
 ```
 
+```{r gt-dbell-summary-table-cwp-influences-mean}
+
+cwp_inf_mean %>% 
+  dumbbellprep_comp() %>% 
+  select(-pair) %>% 
+  pivot_wider(names_from = IRclass,
+              values_from = c(n, mean, sd)) %>% 
+  gt() %>%
+  tab_header(title = "Career Plan Influences: Average Score") %>%
+  fmt_number(4:7,
+             decimals = 2) %>% 
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(2,
+                4,
+                6)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(3,
+                5,
+                7)
+  ) %>%
+  cols_label(
+    demo = "Demographic",
+    `n_First Year` = "n",
+    `mean_First Year` = "M",
+    `sd_First Year` = "SD",
+    n_Senior = "n",
+    mean_Senior = "M",
+    sd_Senior = "SD"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = demo
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  2:7 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center", style = "italic"),
+    locations = cells_column_labels(
+      2:7
+    )
+  ) %>% 
+  cols_width(
+    demo ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+
+```
+
 #### Career Research
 
 ```{r gt-dbell-summary-table-cwp-research}
@@ -3525,6 +3844,66 @@ table_civ_enc %>%
 
 ```
 
+```{r gt-dbell-summary-table-civ-encouragement-mean}
+
+civ_encouragement_mean %>% 
+  dumbbellprep_comp() %>% 
+  select(-pair) %>% 
+  pivot_wider(names_from = IRclass,
+              values_from = c(n, mean, sd)) %>% 
+  gt() %>%
+  tab_header(title = "Civic Engagement Encouragement: Average Score") %>%
+  fmt_number(4:7,
+             decimals = 2) %>% 
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(2,
+                4,
+                6)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(3,
+                5,
+                7)
+  ) %>%
+  cols_label(
+    demo = "Demographic",
+    `n_First Year` = "n",
+    `mean_First Year` = "M",
+    `sd_First Year` = "SD",
+    n_Senior = "n",
+    mean_Senior = "M",
+    sd_Senior = "SD"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = demo
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  2:7 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center", style = "italic"),
+    locations = cells_column_labels(
+      2:7
+    )
+  ) %>% 
+  cols_width(
+    demo ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
+```
+
 #### Civic Engagement Campus and Local Issues
 
 ```{r gt-dbell-summary-table-civ-localissues}
@@ -3639,6 +4018,67 @@ table_civ_loc %>%
     everything() ~ px(70)
   ) %>% 
   opt_align_table_header(align = "left")
+
+```
+
+```{r gt-dbell-summary-table-civ-localissues-mean}
+
+civ_loc_mean %>% 
+  dumbbellprep_comp() %>% 
+  select(-pair) %>% 
+  pivot_wider(names_from = IRclass,
+              values_from = c(n, mean, sd)) %>% 
+  gt() %>%
+  tab_header(title = "Involvement with Campus and Local Issues: Average Score") %>%
+  fmt_number(4:7,
+             decimals = 2) %>% 
+  tab_spanner(
+    label = "First Year",
+    id = 1,
+    columns = c(2,
+                4,
+                6)
+  ) %>%
+  tab_spanner(
+    label = "Senior",
+    id = 2,
+    columns = c(3,
+                5,
+                7)
+  ) %>%
+  cols_label(
+    demo = "Demographic",
+    `n_First Year` = "n",
+    `mean_First Year` = "M",
+    `sd_First Year` = "SD",
+    n_Senior = "n",
+    mean_Senior = "M",
+    sd_Senior = "SD"
+  ) %>% 
+  cols_align(
+    align = "right",
+    columns = demo
+  ) %>% 
+  cols_align(
+    align = "center",
+    columns =  2:7 
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "left"), 
+    locations = cells_column_labels()
+  ) %>% 
+  tab_style(
+    style = cell_text(align = "center", style = "italic"),
+    locations = cells_column_labels(
+      2:7
+    )
+  ) %>% 
+  cols_width(
+    demo ~ px(150),
+    everything() ~ px(70)
+  ) %>% 
+  opt_align_table_header(align = "left")
+
 
 ```
 
@@ -3836,12 +4276,12 @@ likdata <- likert(dd_gender_fy[,3:6], grouping = dd_gender_fy$IRsex19)
 likdata2 <- likert(dd_gender_sr[,3:6], grouping = dd_gender_sr$IRsex19)
 
 plot(likdata, type = "bar") + 
-  labs(title = "Discussions with Diverse Others: First Year Students by Gender",
+  labs(title = "Discussions with Diverse Others: First Year Students by Binary Gender",
        subtitle = "During the current school year, how often have you had discussions with those differing in...?") + 
   theme(legend.title = element_blank())
 
 plot(likdata2, type = "bar") + 
-  labs(title = "Discussions with Diverse Others: Senior Students by Gender",
+  labs(title = "Discussions with Diverse Others: Senior Students by Binary Gender",
        subtitle = "During the current school year, how often have you had discussions with those differing in...?") + 
   theme(legend.title = element_blank(),
         panel.grid = element_blank()) 

@@ -1,0 +1,284 @@
+---
+title: "NSSE 2022 and Historical Analysis [In Progress]"
+author: "Amy N. Warnock"
+date: "2022-12-03"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.width = 8,
+                      fig.height = 6)
+
+#install.packages("here")
+#install.packages("tidyverse")
+#install.packages("janitor")
+#install.packages("rio")
+#install.packages("colorblindr")
+#install.packages("scales")
+#install.packages("wesanderson")
+#install.packages("ggridges")
+#install.packages("Rfast")
+#install.packages("MASS")
+#install.packages("likert")
+#install.packages("psych")
+#install.packages("haven")
+#install.packages("sjPlot")
+#install.packages("ggrepel")
+#install.packages("cowplot")
+#install.packages("remotes")
+#remotes::install_github("martinctc/surveytoolbox")
+#install.packages("colorspace", repos = "http://R-Forge.R-project.org")
+#remotes::install_github("clauswilke/colorblindr")
+#install.packages("stringr")
+#install.packages("gt")
+#install.packages("gtExtras")
+#install.packages("ggh4x")
+
+library(here)
+library(tidyverse)
+library(janitor)
+library(rio)
+library(scales)
+library(wesanderson)
+library(likert)
+library(ggrepel)
+library(cowplot)
+library(surveytoolbox)
+library(colorblindr)
+library(stringr)
+library(gt)
+library(gtExtras)
+library(ggh4x)
+library(psych)
+
+#library(sjPlot)
+```
+
+```{r load-wrangle-historical-nsse}
+
+# load historical NSSE files, selecting only vars of interest
+
+nsse03 <- import(
+  here("data", "NSSE03 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studid,
+         classran,
+         cocurr01,
+         workof01,
+         workon01) %>% 
+  filter(classran == "1") %>% 
+  mutate(year = "2003",
+         studid = as.numeric(studid),
+         tmworkonhrs =
+           case_when(
+             workon01 == '1' ~ 0,
+             workon01 == '2' ~ 3,
+             workon01 == '3' ~ 8,
+             workon01 == '4' ~ 13,
+             workon01 == '5' ~ 18,
+             workon01 == '6' ~ 23,
+             workon01 == '7' ~ 28,
+             workon01 == '8' ~ 33),
+         tmworkoffhrs =
+           case_when(
+             workof01 == '1' ~ 0,
+             workof01 == '2' ~ 3,
+             workof01 == '3' ~ 8,
+             workof01 == '4' ~ 13,
+             workof01 == '5' ~ 18,
+             workof01 == '6' ~ 23,
+             workof01 == '7' ~ 28,
+             workof01 == '8' ~ 33),
+         tmworkhrs = tmworkonhrs + tmworkoffhrs) %>% 
+  rename(IRclass = classran,
+         studentid = studid,
+         tmcocurr = cocurr01)
+
+nsse06 <- import(
+  here("data", "NSSE06 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studid,
+         classran,
+         cocurr01,
+         workof01,
+         workon01) %>% 
+  filter(classran == "1") %>% 
+  mutate(year = "2006",
+         studid = as.numeric(studid),
+         tmworkonhrs =
+           case_when(
+             workon01 == '1' ~ 0,
+             workon01 == '2' ~ 3,
+             workon01 == '3' ~ 8,
+             workon01 == '4' ~ 13,
+             workon01 == '5' ~ 18,
+             workon01 == '6' ~ 23,
+             workon01 == '7' ~ 28,
+             workon01 == '8' ~ 33),
+         tmworkoffhrs =
+           case_when(
+             workof01 == '1' ~ 0,
+             workof01 == '2' ~ 3,
+             workof01 == '3' ~ 8,
+             workof01 == '4' ~ 13,
+             workof01 == '5' ~ 18,
+             workof01 == '6' ~ 23,
+             workof01 == '7' ~ 28,
+             workof01 == '8' ~ 33),
+         tmworkhrs = tmworkonhrs + tmworkoffhrs) %>% 
+  rename(IRclass = classran,
+         studentid = studid,
+         tmcocurr = cocurr01)
+
+nsse09 <- import(
+  here("data", "NSSE09 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studid,
+         classran,
+         cocurr01,
+         workof01,
+         workon01) %>% 
+  filter(classran == "1") %>% 
+  mutate(year = "2009",
+         studid = as.numeric(studid),
+         tmworkonhrs =
+           case_when(
+             workon01 == '1' ~ 0,
+             workon01 == '2' ~ 3,
+             workon01 == '3' ~ 8,
+             workon01 == '4' ~ 13,
+             workon01 == '5' ~ 18,
+             workon01 == '6' ~ 23,
+             workon01 == '7' ~ 28,
+             workon01 == '8' ~ 33),
+         tmworkoffhrs =
+           case_when(
+             workof01 == '1' ~ 0,
+             workof01 == '2' ~ 3,
+             workof01 == '3' ~ 8,
+             workof01 == '4' ~ 13,
+             workof01 == '5' ~ 18,
+             workof01 == '6' ~ 23,
+             workof01 == '7' ~ 28,
+             workof01 == '8' ~ 33),
+         tmworkhrs = tmworkonhrs + tmworkoffhrs) %>% 
+  rename(IRclass = classran,
+         studentid = studid,
+         tmcocurr = cocurr01)
+
+nsse12 <- import(
+  here("data", "NSSE12 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studid,
+         classran,
+         cocurr01,
+         workof01,
+         workon01) %>% 
+  filter(classran == "1") %>% 
+  mutate(year = "2012",
+         studid = as.numeric(studid),
+         tmworkonhrs =
+           case_when(
+             workon01 == '1' ~ 0,
+             workon01 == '2' ~ 3,
+             workon01 == '3' ~ 8,
+             workon01 == '4' ~ 13,
+             workon01 == '5' ~ 18,
+             workon01 == '6' ~ 23,
+             workon01 == '7' ~ 28,
+             workon01 == '8' ~ 33),
+         tmworkoffhrs =
+           case_when(
+             workof01 == '1' ~ 0,
+             workof01 == '2' ~ 3,
+             workof01 == '3' ~ 8,
+             workof01 == '4' ~ 13,
+             workof01 == '5' ~ 18,
+             workof01 == '6' ~ 23,
+             workof01 == '7' ~ 28,
+             workof01 == '8' ~ 33),
+         tmworkhrs = tmworkonhrs + tmworkoffhrs) %>% 
+  rename(IRclass = classran,
+         studentid = studid,
+         tmcocurr = cocurr01)
+
+nsse15 <- import(
+  here("data", "NSSE15 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studentID,
+         IRclass,
+         tmcocurr,
+         tmworkhrs) %>% 
+  filter(IRclass == "1") %>% 
+  mutate(year = "2015",
+         studentID = as.numeric(studentID)) %>% 
+  rename(studentid = studentID)
+
+nsse17 <- import(
+  here("data", "NSSE17 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studentID,
+         IRclass,
+         tmcocurr,
+         tmworkhrs) %>% 
+  filter(IRclass == "1") %>% 
+  mutate(year = "2017",
+         studentID = as.numeric(studentID)) %>% 
+  rename(studentid = studentID)
+
+nsse19 <- import(
+  here("data", "NSSE19 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studentid,
+         IRclass,
+         tmcocurr,
+         tmworkhrs) %>% 
+  filter(IRclass == "1") %>% 
+  mutate(year = "2019",
+         studentid = as.numeric(studentid))
+
+nsse22 <- nsse_orig_full %>% 
+  filter(IRclass == "1") %>% 
+  select(studentid,
+         IRclass,
+         tmcocurr,
+         tmworkhrs) %>% 
+mutate(year = "2022",
+       studentid = as.numeric(studentid),
+       IRclass = as.numeric(IRclass))
+
+```
+
+
+```{r}
+
+nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
+                        nsse12, nsse15, nsse17,
+                        nsse19, nsse22) %>% 
+   mutate(tmcocurr_binned = 
+           case_when(
+             tmcocurr == '1' | tmcocurr == '2' ~ 'Low', 
+             tmcocurr == '3' | tmcocurr == '4' ~ 'Moderate', 
+             tmcocurr == '5' | tmcocurr == '6' | 
+               tmcocurr == '7' | tmcocurr == '8' ~ 'High'),
+          tmworkhrs_binned = cut(tmworkhrs, 
+                                breaks = c(-Inf, 1, 11, 21, Inf),
+                                labels = c("None", "1-10", "11-20", "More than 20"),
+                                right = FALSE)) %>% 
+  select(year,
+         studentid,
+         IRclass,
+         tmcocurr,
+         tmcocurr_binned,
+         tmworkhrs,
+         tmworkhrs_binned) %>% 
+  left_join(enr_ret_grad,
+            by = c("studentid" = "PIDM"))
+
+```
+
