@@ -3,6 +3,8 @@ title: "NSSE 2022 and Historical Analysis [In Progress]"
 author: "Amy N. Warnock"
 date: "2022-12-03"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -242,8 +244,21 @@ nsse19 <- import(
   mutate(year = "2019",
          studentid = as.numeric(studentid))
 
-nsse22 <- nsse_orig_full %>% 
+nsse22a <- nsse_orig_full %>% 
   filter(IRclass == "1") %>% 
+  select(studentid,
+         IRclass,
+         tmcocurr,
+         tmworkhrs) %>% 
+mutate(year = "2022",
+       studentid = as.numeric(studentid),
+       IRclass = as.numeric(IRclass))
+
+
+# trying out filtering by ftfy var instead of class var
+
+nsse22b <- nsse_orig_full %>% 
+  filter(IRftfy == "1") %>% 
   select(studentid,
          IRclass,
          tmcocurr,
@@ -254,12 +269,11 @@ mutate(year = "2022",
 
 ```
 
-
-```{r}
+```{r combine-datasets}
 
 nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
                         nsse12, nsse15, nsse17,
-                        nsse19, nsse22) %>% 
+                        nsse19, nsse22a) %>% 
    mutate(tmcocurr_binned = 
            case_when(
              tmcocurr == '1' | tmcocurr == '2' ~ 'Low', 
@@ -280,5 +294,217 @@ nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
   left_join(enr_ret_grad,
             by = c("studentid" = "PIDM"))
 
+```
+
+```{r}
+ret_cocurr_total <- nsse_historical %>% 
+  group_by(year,
+           tmcocurr_binned) %>% 
+  summarize(ret_year = "overall",
+            n = n()) %>% 
+  drop_na(tmcocurr_binned)
+
+
+nsse_historical %>% 
+  filter(!is.na(tmcocurr_binned)) %>% 
+  group_by(year) %>% 
+  summarize(n = n())
+```
+
+
+```{r plot-retention}
+nsse_historical %>% 
+  select(studentid,
+         year,
+         tmcocurr_binned,
+         starts_with("ret_")) %>% 
+  pivot_longer(cols = starts_with("ret"),
+               names_to = "ret_year",
+               names_prefix = "ret_fall_term_",
+               values_to = "ret") %>% 
+  filter(ret == "1") %>% 
+  group_by(year,
+           tmcocurr_binned,
+           ret_year) %>% 
+  summarize(n = n()) %>% 
+  drop_na(tmcocurr_binned) %>% 
+  bind_rows(ret_cocurr_total) %>% 
+  pivot_wider(names_from = ret_year,
+              values_from = n) %>% 
+  mutate(percent_yr2 = (yr2 / overall),
+         percent_yr3 = (yr3 / overall),
+         percent_yr4 = (yr4 / overall)) %>% 
+  select(-(3:6)) %>% 
+  pivot_longer(cols = 3:5,
+               names_to = "ret_year",
+               names_prefix = "percent_",
+               values_to = "percent") %>% 
+  ggplot(aes(x = ret_year, 
+             y = percent, 
+             group = tmcocurr_binned,
+             color = tmcocurr_binned)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ year)
+```
+
+
+```{r}
+# why are there yr3 and yr4 retention values for first-year students who took NSSE in 2022?
+
+nsse_historical %>% 
+  select(studentid,
+         year,
+         tmcocurr_binned,
+         starts_with("ret_")) %>% 
+  pivot_longer(cols = starts_with("ret"),
+               names_to = "ret_year",
+               names_prefix = "ret_fall_term_",
+               values_to = "ret") %>% 
+  filter(ret == "1",
+         year == "2022") %>% 
+  group_by(tmcocurr_binned,
+           ret_year) %>% 
+  summarize(n = n())
+
+fy_2022_ret34 <- nsse_historical %>% 
+  filter(year == "2022",
+         ret_fall_term_yr3 == "1" |
+         ret_fall_term_yr4 == "1")
+
+
+nsse_historical %>% 
+  filter(ret_fall_term_yr2 == "1") %>% 
+  group_by(year,
+           tmcocurr_binned) %>% 
+  summarize(n = n())
+
+nsse_orig_full %>% 
+  group_by(IRclass,
+           IRftfy) %>% 
+  summarize(n = n())
+```
+
+
+```{r}
+# why don't the ns by year and match the previous analyses?
+
+nsse_historical %>% 
+    group_by(year,
+           tmcocurr_binned) %>% 
+  summarize(n = n())
+
+nsse03 %>% 
+  group_by(tmcocurr) %>% 
+  summarize(n = n()) %>% 
+  drop_na(tmcocurr) %>% 
+  colSums()
+
+
+# figured it out? Dayle used "class" var for filtering historical datasets, which is the self-reported variable. Other analyses used IRclass, which is what I've been using
+
+nsse03b <- import(
+  here("data", "NSSE03 Data (UO).sav"), 
+  setclass = "tbl_df") %>% 
+  select(studid,
+         class,
+         classran,
+         cocurr01,
+         workof01,
+         workon01) %>% 
+  mutate(studid = as.numeric(studid)) %>% 
+  filter(class == "1") %>% 
+  rename(studentid = studid,
+         tmcocurr = cocurr01)
+
+nsse03b %>% 
+  group_by(tmcocurr) %>% 
+  summarize(n = n()) 
+
+nsse03b %>% 
+  group_by(tmcocurr) %>% 
+  summarize(n = n()) %>% 
+  drop_na(tmcocurr) %>% 
+  colSums()
+
+
+nsse03b %>% 
+  left_join(enr_ret_grad,
+            by = c("studentid" = "PIDM")) %>% 
+  select(studentid,
+         tmcocurr,
+         starts_with("ret_")) %>% 
+  pivot_longer(cols = starts_with("ret"),
+               names_to = "ret_year",
+               names_prefix = "ret_fall_term_",
+               values_to = "ret") %>% 
+  filter(ret == "1") %>% 
+  group_by(tmcocurr,
+           ret_year) %>% 
+  summarize(n = n()) %>% 
+  drop_na(tmcocurr) %>% 
+  pivot_wider(names_from = ret_year,
+              values_from = n)
+
+```
+
+
+```{r plot-retention-ftfy2022}
+
+bind_rows(nsse03, nsse06, nsse09,
+                        nsse12, nsse15, nsse17,
+                        nsse19, nsse22b) %>% 
+   mutate(tmcocurr_binned = 
+           case_when(
+             tmcocurr == '1' | tmcocurr == '2' ~ 'Low', 
+             tmcocurr == '3' | tmcocurr == '4' ~ 'Moderate', 
+             tmcocurr == '5' | tmcocurr == '6' | 
+               tmcocurr == '7' | tmcocurr == '8' ~ 'High'),
+          tmworkhrs_binned = cut(tmworkhrs, 
+                                breaks = c(-Inf, 1, 11, 21, Inf),
+                                labels = c("None", "1-10", "11-20", "More than 20"),
+                                right = FALSE)) %>% 
+  select(year,
+         studentid,
+         IRclass,
+         tmcocurr,
+         tmcocurr_binned,
+         tmworkhrs,
+         tmworkhrs_binned) %>% 
+  left_join(enr_ret_grad,
+            by = c("studentid" = "PIDM")) %>% 
+   select(studentid,
+         year,
+         tmcocurr_binned,
+         starts_with("ret_")) %>% 
+  pivot_longer(cols = starts_with("ret"),
+               names_to = "ret_year",
+               names_prefix = "ret_fall_term_",
+               values_to = "ret") %>% 
+  filter(ret == "1") %>% 
+  group_by(year,
+           tmcocurr_binned,
+           ret_year) %>% 
+  summarize(n = n()) %>% 
+  drop_na(tmcocurr_binned) %>% 
+  bind_rows(ret_cocurr_total) %>% 
+  pivot_wider(names_from = ret_year,
+              values_from = n) %>% 
+  mutate(percent_yr2 = (yr2 / overall),
+         percent_yr3 = (yr3 / overall),
+         percent_yr4 = (yr4 / overall)) %>% 
+  select(-(3:6)) %>% 
+  pivot_longer(cols = 3:5,
+               names_to = "ret_year",
+               names_prefix = "percent_",
+               values_to = "percent") %>% 
+  ggplot(aes(x = ret_year, 
+             y = percent, 
+             group = tmcocurr_binned, 
+             color = tmcocurr_binned)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~ year)
 ```
 
