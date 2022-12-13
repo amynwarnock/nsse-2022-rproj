@@ -70,10 +70,10 @@ nsse03 <- import(
   setclass = "tbl_df") %>% 
   select(studid,
          classran,
+         class,
          cocurr01,
          workof01,
          workon01) %>% 
-  filter(classran == "1") %>% 
   mutate(year = "2003",
          studid = as.numeric(studid),
          tmworkonhrs =
@@ -106,10 +106,10 @@ nsse06 <- import(
   setclass = "tbl_df") %>% 
   select(studid,
          classran,
+         class,
          cocurr01,
          workof01,
          workon01) %>% 
-  filter(classran == "1") %>% 
   mutate(year = "2006",
          studid = as.numeric(studid),
          tmworkonhrs =
@@ -142,10 +142,10 @@ nsse09 <- import(
   setclass = "tbl_df") %>% 
   select(studid,
          classran,
+         class,
          cocurr01,
          workof01,
          workon01) %>% 
-  filter(classran == "1") %>% 
   mutate(year = "2009",
          studid = as.numeric(studid),
          tmworkonhrs =
@@ -178,10 +178,10 @@ nsse12 <- import(
   setclass = "tbl_df") %>% 
   select(studid,
          classran,
+         class,
          cocurr01,
          workof01,
          workon01) %>% 
-  filter(classran == "1") %>% 
   mutate(year = "2012",
          studid = as.numeric(studid),
          tmworkonhrs =
@@ -214,9 +214,9 @@ nsse15 <- import(
   setclass = "tbl_df") %>% 
   select(studentID,
          IRclass,
+         class,
          tmcocurr,
          tmworkhrs) %>% 
-  filter(IRclass == "1") %>% 
   mutate(year = "2015",
          studentID = as.numeric(studentID)) %>% 
   rename(studentid = studentID)
@@ -226,9 +226,9 @@ nsse17 <- import(
   setclass = "tbl_df") %>% 
   select(studentID,
          IRclass,
+         class,
          tmcocurr,
          tmworkhrs) %>% 
-  filter(IRclass == "1") %>% 
   mutate(year = "2017",
          studentID = as.numeric(studentID)) %>% 
   rename(studentid = studentID)
@@ -238,11 +238,24 @@ nsse19 <- import(
   setclass = "tbl_df") %>% 
   select(studentid,
          IRclass,
+         class,
          tmcocurr,
          tmworkhrs) %>% 
-  filter(IRclass == "1") %>% 
   mutate(year = "2019",
          studentid = as.numeric(studentid))
+
+nsse22 <- nsse_orig_full %>% 
+  select(studentid,
+         IRclass,
+         class,
+         tmcocurr,
+         tmworkhrs) %>% 
+mutate(year = "2022",
+       studentid = as.numeric(studentid),
+       IRclass = as.numeric(IRclass))
+
+
+## for testing out ftfy vs IRclass var
 
 nsse22a <- nsse_orig_full %>% 
   filter(IRclass == "1") %>% 
@@ -263,9 +276,9 @@ nsse22b <- nsse_orig_full %>%
          IRclass,
          tmcocurr,
          tmworkhrs) %>% 
-mutate(year = "2022",
-       studentid = as.numeric(studentid),
-       IRclass = as.numeric(IRclass))
+  mutate(year = "2022",
+         studentid = as.numeric(studentid),
+         IRclass = as.numeric(IRclass))
 
 ```
 
@@ -273,7 +286,7 @@ mutate(year = "2022",
 
 nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
                         nsse12, nsse15, nsse17,
-                        nsse19, nsse22a) %>% 
+                        nsse19, nsse22) %>% 
    mutate(tmcocurr_binned = 
            case_when(
              tmcocurr == '1' | tmcocurr == '2' ~ 'Low', 
@@ -287,6 +300,7 @@ nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
   select(year,
          studentid,
          IRclass,
+         class,
          tmcocurr,
          tmcocurr_binned,
          tmworkhrs,
@@ -294,10 +308,16 @@ nsse_historical <- bind_rows(nsse03, nsse06, nsse09,
   left_join(enr_ret_grad,
             by = c("studentid" = "PIDM"))
 
+nsse_historical_fy <- nsse_historical %>% 
+  filter(IRclass == "1")
+
+nsse_historical_fy_class <- nsse_historical %>% 
+  filter(class == "1")
+
 ```
 
 ```{r}
-ret_cocurr_total <- nsse_historical %>% 
+ret_cocurr_total <- nsse_historical_fy %>% 
   group_by(year,
            tmcocurr_binned) %>% 
   summarize(ret_year = "overall",
@@ -305,15 +325,25 @@ ret_cocurr_total <- nsse_historical %>%
   drop_na(tmcocurr_binned)
 
 
-nsse_historical %>% 
+# count of FY students w/ responses to tmcocurr by NSSE year filtering by institution-reported class
+nsse_historical_fy %>% 
   filter(!is.na(tmcocurr_binned)) %>% 
   group_by(year) %>% 
   summarize(n = n())
+
+# count of FY students w/ responses to tmcocurr by NSSE - filtering by CLASS (self-reported)
+nsse_historical %>% 
+  filter(!is.na(tmcocurr_binned),
+         class == "1") %>% 
+  group_by(year) %>% 
+  summarize(n = n())
+
 ```
 
 
 ```{r plot-retention}
-nsse_historical %>% 
+
+nsse_historical_fy %>% 
   select(studentid,
          year,
          tmcocurr_binned,
@@ -346,13 +376,14 @@ nsse_historical %>%
   geom_point() +
   geom_line() +
   facet_wrap(~ year)
+
 ```
 
 
 ```{r}
 # why are there yr3 and yr4 retention values for first-year students who took NSSE in 2022?
 
-nsse_historical %>% 
+nsse_historical_fy %>% 
   select(studentid,
          year,
          tmcocurr_binned,
@@ -367,13 +398,13 @@ nsse_historical %>%
            ret_year) %>% 
   summarize(n = n())
 
-fy_2022_ret34 <- nsse_historical %>% 
+fy_2022_ret34 <- nsse_historical_fy %>% 
   filter(year == "2022",
          ret_fall_term_yr3 == "1" |
          ret_fall_term_yr4 == "1")
 
 
-nsse_historical %>% 
+nsse_historical_fy %>% 
   filter(ret_fall_term_yr2 == "1") %>% 
   group_by(year,
            tmcocurr_binned) %>% 
@@ -387,9 +418,14 @@ nsse_orig_full %>%
 
 
 ```{r}
-# why don't the ns by year and match the previous analyses?
+# why don't the ns by year match the previous analyses?
 
-nsse_historical %>% 
+nsse_historical_fy %>% 
+    group_by(year,
+           tmcocurr_binned) %>% 
+  summarize(n = n())
+
+nsse_historical_fy %>% 
     group_by(year,
            tmcocurr_binned) %>% 
   summarize(n = n())
@@ -399,6 +435,8 @@ nsse03 %>%
   summarize(n = n()) %>% 
   drop_na(tmcocurr) %>% 
   colSums()
+
+
 
 
 # figured it out? Dayle used "class" var for filtering historical datasets, which is the self-reported variable. Other analyses used IRclass, which is what I've been using

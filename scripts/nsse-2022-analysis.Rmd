@@ -391,8 +391,71 @@ enr_ret_grad <- enr_orig_full %>%
       ttd_4 == 1 ~ '4',
       ttd_5 == 1 ~ '5',
       ttd_6 == 1 ~ '6',
-      ttd_7 == 1 ~ '7+')
-  ) %>% 
+      ttd_7 == 1 ~ '7+'))
+
+
+# checking to see if the issue of students w/ consecutive graduation indicators occurs in winter 2022 ENR file
+enr_ret_grad_winter2022 <- import(
+  here("data", "enr_detail_202102_winter_2022.xlsx"),
+       setclass = "tbl_df") %>% 
+  select(PIDM,
+         ID,
+         ret_fall_term_yr2,
+         ret_fall_term_yr3,
+         ret_fall_term_yr4,
+         starts_with("grad")) %>% 
+  
+  mutate(
+    ttd_4 = ifelse(rowSums(across(starts_with("grad") &
+                                    ((ends_with("yr1") |
+                                     ends_with("yr2") |
+                                     ends_with("yr3") |
+                                     ends_with("yr4"))), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_5 = ifelse(rowSums(across(starts_with("grad") &
+                                    (ends_with("yr5")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_6 = ifelse(rowSums(across(starts_with("grad") &
+                                    (ends_with("yr6")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_7 = ifelse(rowSums(across(starts_with("grad") &
+                                    (ends_with("yr7") |
+                                     ends_with("yr8") |
+                                     ends_with("yr9") |
+                                     ends_with("yr10")), 
+                                  ~.x == "1")) >= 1,
+                   1,
+                   0),
+    ttd_count = rowSums(across(ttd_4:ttd_7)),
+    ttd = case_when(
+      ttd_4 == 1 ~ '4',
+      ttd_5 == 1 ~ '5',
+      ttd_6 == 1 ~ '6',
+      ttd_7 == 1 ~ '7+'))
+
+enr_winter22_multgrad <- enr_ret_grad_winter2022 %>% 
+  filter(ttd_4 == "1" &
+           ttd_5 == "1" &
+           ttd_6 == "1" & 
+           ttd_7 == "1")
+
+enr_fall22_multgrad <- enr_ret_grad %>% 
+  filter(ttd_4 == "1" &
+           ttd_5 == "1" &
+           ttd_6 == "1" & 
+           ttd_7 == "1")
+
+enr_fall22_multgrad_winterID <- enr_winter22_multgrad %>% 
+  select(PIDM, ID) %>% 
+  mutate(winter22 = "x") %>% 
+  right_join(enr_fall22_multgrad,
+             by = "PIDM") %>%
   select(-starts_with("grad"))
     
 #nsse_enr_testing <- left_join(nsse_fct_wide, enr_ret_grad,
